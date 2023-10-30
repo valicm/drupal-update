@@ -1,0 +1,19 @@
+name: 'Drupal Composer updates'
+description: 'Used to perform updates of Drupal core and/or contributed modules'
+author: 'valicm'
+branding:
+  icon: activity
+  color: white
+inputs:
+  update_type:
+    description: 'Are we doing minor or major updates. Allowed values are semver-safe-update or all'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - run: echo "INPUT_UPDATE_TYPE=${{ inputs.update_type }}" >> $GITHUB_ENV
+      shell: bash
+    - run: chmod +x ${{ github.action_path }}/drupal-update.sh
+      shell: bash
+    - run: $GITHUB_ACTION_PATH/drupal-update.sh
+      shell: bash
