@@ -6,20 +6,18 @@
 set -e
 
 ###############################################################################
+# Simplistic script to use with GitHub Actions or standalone                  #
+# to perform composer updates.                                                #
+#                                                                             #
+# Standalone usage                                                            #
+# Run minor updates         -> bash drupal-update.sh                          #
+# Run all updates         -> bash drupal-update.sh all                        #                                                                           #
 # Predefined options                                                          #
 #                                                                             #
 # Type of update to perform                                                   #
 # - semver-safe-update (only perform minor changes in versions)               #
 # - all (perform all possible upgrades, includes minor)                       #
 #                                                                             #
-###############################################################################
-
-###############################################################################
-# Simplistic script to use with GitHub Actions or standalone                  #
-# to perform composer updates.                                                #
-#                                                                             #
-# Standalone usage                                                            #
-# Perform minor updates         -> bash drupal-update.sh semver-safe-update   #
 ###############################################################################
 
 # Update project based on composer update status.
@@ -62,6 +60,9 @@ then
   UPDATE_TYPE="semver-safe-update"
 fi
 
+# Get full composer content for later usage.
+COMPOSER_CONTENTS=$(< composer.json);
+
 # Define variable for writing summary table.
 SUMMARY_OUTPUT_TABLE="| Project name | Old version | Proposed version | Update status | Patch review | Abandoned |\n"
 SUMMARY_OUTPUT_TABLE+="| ------ | ------ | ------ | ------ | ------ | ------ |\n"
@@ -75,7 +76,7 @@ for UPDATE in $(echo "${UPDATES}" | jq -c '.locked[]'); do
   LATEST_VERSION=$(echo "${UPDATE}" | jq '."latest"' | sed "s/\"//g")
   UPDATE_STATUS=$(echo "${UPDATE}" | jq '."latest-status"' | sed "s/\"//g")
   ABANDONED=$(echo "${UPDATE}" | jq '."abandoned"' | sed "s/\"//g")
-  PATCHES=$(cat composer.json | jq '.extra.patches."'$PROJECT_NAME'" | length')
+  PATCHES=$(echo "$COMPOSER_CONTENTS" | jq '.extra.patches."'"$PROJECT_NAME"'" | length')
 
   RESULT="skipped"
 
