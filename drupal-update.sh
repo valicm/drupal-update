@@ -98,10 +98,10 @@ done
 # For GitHub actions use inputs.
 if [ "$GITHUB_RUNNING_ACTION" == true ]
 then
-  echo "$SUMMARY_OUTPUT_TABLE" >> "$GITHUB_STEP_SUMMARY"
+  echo -e "$SUMMARY_OUTPUT_TABLE" >> "$GITHUB_STEP_SUMMARY"
   {
     echo 'DRUPAL_UPDATES_TABLE<<EOF'
-    echo -e "$GITHUB_STEP_SUMMARY"
+    cat "$GITHUB_STEP_SUMMARY"
     echo 'EOF'
   } >>"$GITHUB_ENV"
 else
