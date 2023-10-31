@@ -22,6 +22,8 @@ set -e
 # Perform minor updates         -> bash drupal-update.sh semver-safe-update   #
 ###############################################################################
 
+# Update project based on composer update status.
+# Mark dev versions as success, because we don't have specific version.
 update_project() {
     PROJECT_NAME=$1
     CURRENT_VERSION=$2
@@ -60,8 +62,9 @@ then
   UPDATE_TYPE="semver-safe-update"
 fi
 
-echo "| Project name | Old version | Proposed version | Update status | Patch review | Abandoned |"  >> "$GITHUB_STEP_SUMMARY"
-echo "| ------ | ------ | ------ | ------ | ------ | ------ |" >> "$GITHUB_STEP_SUMMARY"
+# Define variable for writing summary table.
+SUMMARY_OUTPUT_TABLE="| Project name | Old version | Proposed version | Update status | Patch review | Abandoned |\n"
+SUMMARY_OUTPUT_TABLE+="| ------ | ------ | ------ | ------ | ------ | ------ |\n"
 # Read composer output. Remove whitespaces - jq 1.5 can break while parsing.
 UPDATES=$(composer outdated "drupal/*" -f json -D --locked --ignore-platform-reqs | sed -r 's/\s+//g');
 
@@ -88,10 +91,20 @@ for UPDATE in $(echo "${UPDATES}" | jq -c '.locked[]'); do
     fi
   fi
 
-  echo "| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | ${LATEST_VERSION} | $RESULT | $PATCHES | $ABANDONED |" >> "$GITHUB_STEP_SUMMARY"
+  SUMMARY_OUTPUT_TABLE+="| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | ${LATEST_VERSION} | $RESULT | $PATCHES | $ABANDONED |\n"
 
 done
 
-echo 'DRUPAL_UPDATES_TABLE<<EOF' >> "$GITHUB_ENV"
-echo "$(cat $GITHUB_STEP_SUMMARY)" >> "$GITHUB_ENV"
-echo 'EOF' >> "$GITHUB_ENV"
+# For GitHub actions use inputs.
+if [ "$GITHUB_RUNNING_ACTION" == true ]
+then
+  echo "$SUMMARY_OUTPUT_TABLE" >> "$GITHUB_STEP_SUMMARY"
+  {
+    echo 'DRUPAL_UPDATES_TABLE<<EOF'
+    echo -e "$GITHUB_STEP_SUMMARY"
+    echo 'EOF'
+  } >>"$GITHUB_ENV"
+else
+  echo -e "$SUMMARY_OUTPUT_TABLE"
+fi
+
