@@ -296,7 +296,12 @@ done
 # It should be passable between same major versions of D10.
 if [ "$UPDATE_CORE" == true ]; then
   CORE_PACKAGE=$(echo "${UPDATES}" | jq -c '.locked[] | select(.name == "drupal/core")')
-  update_project "$CORE_PACKAGE" SUMMARY_OUTPUT_TABLE SUMMARY_INSTRUCTIONS
+  if [ -z "$CORE_PACKAGE" ] || [ "$CORE_PACKAGE" == null ]; then
+    CORE_PACKAGE=$(echo "${UPDATES}" | jq -c '.locked[] | select(.name == "drupal/core-recommended")')
+  fi
+  if [ "$CORE_PACKAGE" ]; then
+    update_project "$CORE_PACKAGE" SUMMARY_OUTPUT_TABLE SUMMARY_INSTRUCTIONS
+  fi
 fi
 
 SUMMARY_INSTRUCTIONS+="\n$SUMMARY_OUTPUT_TABLE"
