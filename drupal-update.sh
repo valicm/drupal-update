@@ -47,6 +47,11 @@ validate_options() {
       echo "Error: Core flag must be either true or false. Default if empty is false"
       exit_error
     fi
+
+    if [ -n "$SUMMARY_FILE" ] && [[ "$SUMMARY_FILE" != *.md ]]; then
+      echo "Error: Summary output file needs to end with .md extension"
+      exit_error
+    fi
 }
 
 # Validate if all requirements are present.
@@ -156,7 +161,7 @@ UPDATES=$(composer outdated "drupal/*" -f json -D --locked --ignore-platform-req
 for UPDATE in $(echo "${UPDATES}" | jq -c '.locked[]'); do
   PROJECT_NAME=$(echo "${UPDATE}" | jq '."name"' | sed "s/\"//g")
   PROJECT_URL=$(echo "${UPDATE}" | jq '."homepage"' | sed "s/\"//g")
-  if [ -n "$PROJECT_URL" ]; then
+  if [ -z "$PROJECT_URL" ] || [ "$PROJECT_URL" == null ]; then
     PROJECT_URL="https://www.drupal.org/project/drupal"
   fi
   CURRENT_VERSION=$(echo "${UPDATE}" | jq '."version"' | sed "s/\"//g")
