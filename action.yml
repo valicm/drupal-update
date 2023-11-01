@@ -2,8 +2,8 @@ name: 'Drupal Composer updates'
 description: 'Used to perform updates of Drupal core and/or contributed modules'
 author: 'valicm'
 branding:
-  icon: activity
-  color: white
+  icon: check-circle
+  color: blue
 inputs:
   update_type:
     description: 'Are we doing minor or major updates. Allowed values are semver-safe-update or all'

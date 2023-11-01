@@ -13,7 +13,7 @@ jobs:
 
       - name: Check updates
         id: updates
-        uses: valicm/drupal-update@v3
+        uses: valicm/drupal-update@v4
 
       - name: create pull-request
         uses: peter-evans/create-pull-request@v5

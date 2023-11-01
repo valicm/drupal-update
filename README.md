@@ -10,6 +10,12 @@ It can be used as a GitHub action or as a standalone script/integrated into othe
 * can be used as a GitHub action
 * can be used as a standalone script.
 
+## Notes
+* supported update type modes are `semver-safe-update` and `all`. `All` represents full upgrade between major core versions.
+* Semver necessarily does not mean minor versions only (etc 2.1.0, 2.1.2). 
+* If you requested package as `^11.0`, any release as `^11.5` is considered by this script as `minor`.
+* The provided patch failures could be in some scenarios false-positive.
+* This tool is not providing a one click upgrade - review release notes for each module, etc.
 
 ## GitHub Action Usage
 ![](https://vallic.com/sites/default/files/2023-11/github_example.png "GitHub Drupal Upgrades")
@@ -21,7 +27,7 @@ See [action.yml](action.yml)
       - uses: actions/checkout@v2
       - name: Check updates
         id: updates
-        uses: valicm/drupal-update@v3
+        uses: valicm/drupal-update@v4
 
 ```
 
@@ -47,7 +53,7 @@ jobs:
         
       - name: Check updates
         id: updates
-        uses: valicm/drupal-update@v3
+        uses: valicm/drupal-update@v4
 
       - name: create pull-request
         uses: peter-evans/create-pull-request@v5
