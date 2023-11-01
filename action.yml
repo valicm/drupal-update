@@ -10,7 +10,7 @@ inputs:
     required: false
     default: 'semver-safe-update'
   update_core:
-    description: 'Skip checking for Drupal core updates. Default false'
+    description: 'Skip checking for Drupal core updates. Default true'
     required: false
     default: 'true'
   update_exclude:
