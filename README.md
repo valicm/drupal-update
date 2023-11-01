@@ -1,12 +1,16 @@
-# Description
+## Description
+Bash script for updating Drupal core and/or contributed modules with Composer. 
+It can be used as GitHub action or as standalone script/integrated in other CI tools.
 
-GitHub Action for updating Drupal core and/or contributed modules
-with Composer.
+## Features
+* perform minor or major updates to Drupal core / contributed modules
+* options to exclude modules from check, and / or enabling Drupal core checks
+* outputs Markdown table of changes as file or environment variable
+* can be used as a GitHub action
+* can be used as a standalone script.
 
-It outputs table of changes, which than can be used further in GitHub workflows.
-It can be used as GitHub action, but bash script can be used as standalone outside of GitHub.
 
-# GitHub Action Usage
+## GitHub Action Usage
 
 See [action.yml](action.yml)
 
@@ -15,21 +19,15 @@ See [action.yml](action.yml)
       - uses: actions/checkout@v2
       - name: Check updates
         id: updates
-        uses: valicm/drupal-update@v1
-        with:
-          update_type: 'semver-safe-update'
+        uses: valicm/drupal-update@v2
 
 ```
 
-- update_type -> can be either `semver-safe-update` or `all`. 
-
-semver-safe-update - means it will perform minor updates
-
-all - means it would try to perform all updates
-
-# Example to auto-create PR with minor updates
-Runs each day once at midnight. Perform all minor updates, and creates automated PR.
-(you need to set secret variable named MY_PERSONAL_TOKEN in your repo, so that PR can be created)
+### GitHub action example to create PR with updates
+* Runs each day once at midnight. 
+* Perform minor/security updates
+* Creates automated PR with branch `drupal-automated-updates`
+_(you need to set secret variable named MY_PERSONAL_TOKEN in your repo, so that PR can be created)_
 
 ```yaml
 name: Automated Drupal updates
@@ -47,9 +45,7 @@ jobs:
         
       - name: Check updates
         id: updates
-        uses: valicm/drupal-update@v1
-        with:
-          update_type: 'semver-safe-update'
+        uses: valicm/drupal-update@v2
 
       - name: create pull-request
         uses: peter-evans/create-pull-request@v5
@@ -63,3 +59,11 @@ jobs:
 
 ```
 
+## Standalone script usage
+| Example                                       | Command                                      |
+|-----------------------------------------------|----------------------------------------------|
+| Run all minor and security updates            | `bash drupal-update.sh`                      |
+| Run any update (minor, security, major)       | `bash drupal-update.sh -t all`               |
+| Run any update, except for Drupal core        | `bash drupal-update.sh -t all -c false`      |
+| Run minor update, excluding some modules      | `bash drupal-update.sh -e pathauto,redirect` |
+| Run all updates, saving summary in upgrade.md | `bash drupal-update.sh -t all -o upgrade.md` |
