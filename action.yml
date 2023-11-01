@@ -7,11 +7,21 @@ branding:
 inputs:
   update_type:
     description: 'Are we doing minor or major updates. Allowed values are semver-safe-update or all'
-    required: true
+    required: false
+  update_core:
+    description: 'Skip checking for Drupal core updates. Default false'
+    required: false
+  update_exclude:
+    description: 'Modules excluded from checks. Use comma separated list: token,redirect,pathauto'
+    required: false
 runs:
   using: "composite"
   steps:
     - run: echo "INPUT_UPDATE_TYPE=${{ inputs.update_type }}" >> $GITHUB_ENV
+      shell: bash
+    - run: echo "INPUT_UPDATE_CORE=${{ inputs.update_core }}" >> $GITHUB_ENV
+      shell: bash
+    - run: echo "INPUT_UPDATE_EXCLUDE=${{ inputs.update_exclude }}" >> $GITHUB_ENV
       shell: bash
     - run: chmod +x ${{ github.action_path }}/drupal-update.sh
       shell: bash
