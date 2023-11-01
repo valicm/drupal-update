@@ -8,9 +8,11 @@ inputs:
   update_type:
     description: 'Are we doing minor or major updates. Allowed values are semver-safe-update or all'
     required: false
+    default: 'semver-safe-update'
   update_core:
     description: 'Skip checking for Drupal core updates. Default false'
     required: false
+    default: 'true'
   update_exclude:
     description: 'Modules excluded from checks. Use comma separated list: token,redirect,pathauto'
     required: false
