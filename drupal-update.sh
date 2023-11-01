@@ -14,6 +14,13 @@
 
 set -e
 
+RESULT_SUCCESS="success"
+RESULT_PATCH_FAILURE="patch failure"
+RESULT_GENERIC_ERROR="generic error"
+RESULT_DEPENDENCY_ERROR="failed dependency"
+RESULT_UNKNOWN="unknown"
+RESULT_SKIP="skipped"
+
 # Function to display script usage.
 usage() {
  echo "Usage: $0 [OPTIONS]"
@@ -62,7 +69,7 @@ validate_requirements() {
     exit 1
   fi
 
-  BINARIES="php composer sed jq";
+  local BINARIES="php composer sed grep jq";
   for BINARY in $BINARIES
   do
     if ! [ -x "$(command -v "$BINARY")" ]; then
@@ -80,19 +87,50 @@ update_project() {
     CURRENT_VERSION=$2
     LATEST_VERSION=$3
     UPDATE_STATUS=$4
+    PATCH_LIST=$5
+    local COMPOSER_OUTPUT=
     if [ "$UPDATE_STATUS" == "update-possible" ]; then
-      composer require "$PROJECT_NAME":"$LATEST_VERSION" -W -q --ignore-platform-reqs
+      COMPOSER_OUTPUT=$(composer require "$PROJECT_NAME":"$LATEST_VERSION" -W -q -n --ignore-platform-reqs)
     else
-      composer update "$PROJECT_NAME" -W -q --ignore-platform-reqs
+      COMPOSER_OUTPUT=$(composer update "$PROJECT_NAME" -W -q -n --ignore-platform-reqs)
     fi
 
-    if [[ $LATEST_VERSION == dev-* ]]; then
-      echo success
-    elif grep -q "$LATEST_VERSION" composer.lock; then
-      echo success
-    else
-      echo failed
-    fi
+    local EXIT_CODE=$?;
+
+    case "$EXIT_CODE" in
+      0)
+        echo $RESULT_SUCCESS
+      ;;
+      1)
+        # Do sanity check before comparing patches.
+        if [[ $LATEST_VERSION == dev-* ]]; then
+          RESULT=$RESULT_SUCCESS
+        elif grep -q "$LATEST_VERSION" composer.lock; then
+          RESULT=$RESULT_SUCCESS
+        else
+          RESULT=$RESULT_GENERIC_ERROR
+        fi
+
+        # Compare list of patches. We need to compare them, because if previous
+        # one failed, composer install is going to throw error.
+        if [ -n "$PATCH_LIST" ]; then
+          local PATCH=
+          for PATCH in $(echo "${PATCH_LIST}" | jq -c '.[]'); do
+             if [ "$(grep -s -c -ic "$PATCH" "$COMPOSER_OUTPUT")" != 0 ]; then
+               RESULT="$PATCH"
+             else
+               continue
+             fi
+          done
+        fi
+        echo "$RESULT"
+      ;;
+      2)
+        echo "$RESULT_DEPENDENCY_ERROR"
+      ;;
+      *)
+        echo "$RESULT_UNKNOWN"
+    esac
 }
 
 # Set default values.
@@ -152,8 +190,10 @@ fi
 # Get full composer content for later usage.
 COMPOSER_CONTENTS=$(< composer.json);
 
+SUMMARY_INSTRUCTIONS="### Automated Drupal update summary\n"
+
 # Define variable for writing summary table.
-SUMMARY_OUTPUT_TABLE="| Project name | Old version | Proposed version | Update status | Patch review | Abandoned |\n"
+SUMMARY_OUTPUT_TABLE="| Project name | Old version | Proposed version | Status | Patches | Abandoned |\n"
 SUMMARY_OUTPUT_TABLE+="| ------ | ------ | ------ | ------ | ------ | ------ |\n"
 # Read composer output. Remove whitespaces - jq 1.5 can break while parsing.
 UPDATES=$(composer outdated "drupal/*" -f json -D --locked --ignore-platform-reqs | sed -r 's/\s+//g');
@@ -170,18 +210,24 @@ for UPDATE in $(echo "${UPDATES}" | jq -c '.locked[]'); do
   ABANDONED=$(echo "${UPDATE}" | jq '."abandoned"' | sed "s/\"//g")
   PATCHES=$(echo "$COMPOSER_CONTENTS" | jq '.extra.patches."'"$PROJECT_NAME"'" | length')
 
+  PATCH_LIST=
+  if [ "$PATCHES" -gt 0 ]; then
+    PATCH_LIST=$(echo "$COMPOSER_CONTENTS" | jq '.extra.patches."'"$PROJECT_NAME"'"')
+  fi
+
   PROJECT_RELEASE_URL=$PROJECT_URL
   if [[ $LATEST_VERSION != dev-* ]]; then
      PROJECT_RELEASE_URL=$PROJECT_URL"/releases/"$LATEST_VERSION
   fi
 
-  RESULT="skipped"
+  RESULT=$RESULT_SKIP
 
   # Go through excluded packages and skip them.
   if [ -n "$UPDATE_EXCLUDE" ]; then
     for EXCLUDE in $UPDATE_EXCLUDE
     do
-      if [ "$PROJECT_NAME" = "drupal/$EXCLUDE" ]; then
+      if [ "$PROJECT_NAME" == "drupal/$EXCLUDE" ]; then
+       SUMMARY_OUTPUT_TABLE+="| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | [${LATEST_VERSION}]($PROJECT_RELEASE_URL) | $RESULT | $PATCHES | $ABANDONED |\n"
        continue
       fi
     done
@@ -191,34 +237,49 @@ for UPDATE in $(echo "${UPDATES}" | jq -c '.locked[]'); do
   # Still write latest version for summary table.
   if [ "$UPDATE_CORE" == false ]; then
     if [[ "$PROJECT_NAME" =~ drupal/core-* ]] || [ "$PROJECT_NAME" = "drupal/core" ]; then
-      SUMMARY_OUTPUT_TABLE+="| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | [${LATEST_VERSION}]($PROJECT_RELEASE_URL) | skipped | $PATCHES | $ABANDONED |\n"
+      echo "Skipping upgrades for $PROJECT_NAME"
+      SUMMARY_OUTPUT_TABLE+="| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | [${LATEST_VERSION}]($PROJECT_RELEASE_URL) | $RESULT | $PATCHES | $ABANDONED |\n"
       continue
     fi
   fi
 
   if [ "$UPDATE_TYPE" == 'major' ]; then
     echo "Update $PROJECT_NAME from $CURRENT_VERSION to $LATEST_VERSION"
-    RESULT=$(update_project "$PROJECT_NAME" "$CURRENT_VERSION" "$LATEST_VERSION" "$UPDATE_STATUS")
+    RESULT=$(update_project "$PROJECT_NAME" "$CURRENT_VERSION" "$LATEST_VERSION" "$UPDATE_STATUS", "$PATCH_LIST")
   else
     if [ "$UPDATE_STATUS" == "$UPDATE_TYPE" ]; then
       echo "Update $PROJECT_NAME from $CURRENT_VERSION to $LATEST_VERSION"
-      RESULT=$(update_project "$PROJECT_NAME" "$CURRENT_VERSION" "$LATEST_VERSION" "$UPDATE_STATUS")
+      RESULT=$(update_project "$PROJECT_NAME" "$CURRENT_VERSION" "$LATEST_VERSION" "$UPDATE_STATUS", "$PATCH_LIST")
+    else
+      echo "Skipping upgrades for $PROJECT_NAME"
     fi
+  fi
+
+  # Write specific cases in highlights summary report.
+  if [ ${#RESULT} -gt 20 ]; then
+    SUMMARY_INSTRUCTIONS+="- **$PROJECT_NAME** had failure during applying of patch: *$RESULT*.\n"
+    RESULT=$RESULT_PATCH_FAILURE
+  fi
+
+  if [ "$RESULT" == "$RESULT_DEPENDENCY_ERROR" ]; then
+    SUMMARY_INSTRUCTIONS+="- **$PROJECT_NAME** had unresolved dependency.\n"
   fi
 
   SUMMARY_OUTPUT_TABLE+="| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | [${LATEST_VERSION}]($PROJECT_RELEASE_URL) | $RESULT | $PATCHES | $ABANDONED |\n"
 done
 
+SUMMARY_INSTRUCTIONS+="\n$SUMMARY_OUTPUT_TABLE"
+
 # For GitHub actions use GitHub step summary and environment variable DRUPAL_UPDATES_TABLE.
 if [ "$GITHUB_RUNNING_ACTION" == true ]; then
-  echo -e "$SUMMARY_OUTPUT_TABLE" >> "$GITHUB_STEP_SUMMARY"
+  echo -e "$SUMMARY_INSTRUCTIONS" >> "$GITHUB_STEP_SUMMARY"
   {
     echo 'DRUPAL_UPDATES_TABLE<<EOF'
     cat "$GITHUB_STEP_SUMMARY"
     echo 'EOF'
   } >>"$GITHUB_ENV"
 else
-  echo -e "$SUMMARY_OUTPUT_TABLE"
+  echo -e "$SUMMARY_INSTRUCTIONS"
 fi
 
 # If we have summary file.
@@ -226,5 +287,5 @@ if [ -n "$SUMMARY_FILE" ]; then
   if [ ! -f "$SUMMARY_FILE" ]; then
     touch "$SUMMARY_FILE"
   fi
-  echo -e "$SUMMARY_OUTPUT_TABLE" > "$SUMMARY_FILE"
+  echo -e "$SUMMARY_INSTRUCTIONS" > "$SUMMARY_FILE"
 fi
