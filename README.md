@@ -21,7 +21,7 @@ See [action.yml](action.yml)
       - uses: actions/checkout@v2
       - name: Check updates
         id: updates
-        uses: valicm/drupal-update@v2
+        uses: valicm/drupal-update@v3
 
 ```
 
