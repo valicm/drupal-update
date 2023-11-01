@@ -69,3 +69,9 @@ jobs:
 | Run any update, except for Drupal core        | `bash drupal-update.sh -t all -c false`      |
 | Run minor update, excluding some modules      | `bash drupal-update.sh -e pathauto,redirect` |
 | Run all updates, saving summary in upgrade.md | `bash drupal-update.sh -t all -o upgrade.md` |
+
+
+Get all minor updates and output results in summary.md file.
+```bash
+curl -fsSL https://raw.githubusercontent.com/valicm/drupal-update/main/drupal-update.sh | bash -s -- -o summary.md
+```
