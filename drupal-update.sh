@@ -70,6 +70,7 @@ validate_requirements() {
   fi
 
   local BINARIES="php composer sed grep jq";
+  local BINARY
   for BINARY in $BINARIES
   do
     if ! [ -x "$(command -v "$BINARY")" ]; then
@@ -80,57 +81,139 @@ validate_requirements() {
 
 }
 
-# Update project based on composer update status.
-# Mark dev versions as a success because we don't have a specific version.
-update_project() {
-    PROJECT_NAME=$1
-    CURRENT_VERSION=$2
-    LATEST_VERSION=$3
-    UPDATE_STATUS=$4
-    PATCH_LIST=$5
-    local COMPOSER_OUTPUT=
+# Handles output from Composer, and assign corresponding status.
+composer_output() {
+  local COMPOSER_OUTPUT
+  local PROJECT_NAME
+  local LATEST_VERSION
+  local UPDATE_STATUS
+  local PATCH_LIST
+  PROJECT_NAME=$1
+  LATEST_VERSION=$2
+  UPDATE_STATUS=$3
+  PATCH_LIST=$4
+
+    # Handle specific case for Drupal core.
+  if [ "$PROJECT_NAME" = "drupal/core" ]; then
+    if [ "$UPDATE_TYPE" == "all" ] && [ "$UPDATE_STATUS" == "update-possible" ]; then
+      COMPOSER_OUTPUT=$(composer require drupal/core-recommended:"$LATEST_VERSION" drupal/core-composer-scaffold:"$LATEST_VERSION" drupal/core-project-message:"$LATEST_VERSION" -W -q -n --ignore-platform-reqs)
+    else
+      COMPOSER_OUTPUT=$(composer update drupal/core-* -W -q -n --ignore-platform-reqs)
+    fi
+  else
     if [ "$UPDATE_STATUS" == "update-possible" ]; then
       COMPOSER_OUTPUT=$(composer require "$PROJECT_NAME":"$LATEST_VERSION" -W -q -n --ignore-platform-reqs)
     else
       COMPOSER_OUTPUT=$(composer update "$PROJECT_NAME" -W -q -n --ignore-platform-reqs)
     fi
+  fi
 
-    local EXIT_CODE=$?;
+  local EXIT_CODE=$?;
 
-    case "$EXIT_CODE" in
-      0)
-        echo $RESULT_SUCCESS
-      ;;
-      1)
-        # Do a sanity check before comparing patches.
-        if [[ $LATEST_VERSION == dev-* ]]; then
-          RESULT=$RESULT_SUCCESS
-        elif grep -q "$LATEST_VERSION" composer.lock; then
-          RESULT=$RESULT_SUCCESS
-        else
-          RESULT=$RESULT_GENERIC_ERROR
-        fi
+  case "$EXIT_CODE" in
+    0)
+      echo $RESULT_SUCCESS
+    ;;
+    1)
+      local RESULT
+      # Do a sanity check before comparing patches.
+      if [[ $LATEST_VERSION == dev-* ]]; then
+        RESULT=$RESULT_SUCCESS
+      elif grep -q "$LATEST_VERSION" composer.lock; then
+        RESULT=$RESULT_SUCCESS
+      else
+        RESULT=$RESULT_GENERIC_ERROR
+      fi
 
-        # Compare the list of patches. We need to compare them because if previous
-        # one failed; composer install is going to throw an error.
-        if [ -n "$PATCH_LIST" ]; then
-          local PATCH=
-          for PATCH in $(echo "${PATCH_LIST}" | jq -c '.[]'); do
-             if [ "$(grep -s -c -ic "$PATCH" "$COMPOSER_OUTPUT")" != 0 ]; then
-               RESULT="$PATCH"
-             else
-               continue
-             fi
-          done
-        fi
-        echo "$RESULT"
-      ;;
-      2)
-        echo "$RESULT_DEPENDENCY_ERROR"
-      ;;
-      *)
-        echo "$RESULT_UNKNOWN"
-    esac
+      # Compare the list of patches. We need to compare them because if previous
+      # one failed; composer install is going to throw an error.
+      if [ -n "$PATCH_LIST" ]; then
+        local PATCH=
+        for PATCH in $(echo "${PATCH_LIST}" | jq -c '.[]'); do
+           if [ "$(grep -s -c -ic "$PATCH" "$COMPOSER_OUTPUT")" != 0 ]; then
+             RESULT="$PATCH"
+           else
+             continue
+           fi
+        done
+      fi
+      echo "$RESULT"
+    ;;
+    2)
+      echo "$RESULT_DEPENDENCY_ERROR"
+    ;;
+    *)
+      echo "$RESULT_UNKNOWN"
+  esac
+}
+
+# Update or skip project per different criteria.
+update_project() {
+  local COMPOSER_PACKAGE=$1
+  declare -n RESULT_TABLE=$2
+  declare -n RESULT_HIGHLIGHTS=$3
+  local RESULT_STATUS=$RESULT_SKIP
+  local SKIP_PROJECT=false
+  local PROJECT_NAME
+  local PROJECT_URL
+  local CURRENT_VERSION
+  local LATEST_VERSION
+  local UPDATE_STATUS
+  local ABANDONED
+  local PATCHES
+  PROJECT_NAME=$(echo "${COMPOSER_PACKAGE}" | jq '."name"' | sed "s/\"//g")
+  PROJECT_URL=$(echo "${COMPOSER_PACKAGE}" | jq '."homepage"' | sed "s/\"//g")
+  if [ -z "$PROJECT_URL" ] || [ "$PROJECT_URL" == null ]; then
+    PROJECT_URL="https://www.drupal.org/project/drupal"
+  fi
+  CURRENT_VERSION=$(echo "${COMPOSER_PACKAGE}" | jq '."version"' | sed "s/\"//g")
+  LATEST_VERSION=$(echo "${COMPOSER_PACKAGE}" | jq '."latest"' | sed "s/\"//g")
+  UPDATE_STATUS=$(echo "${COMPOSER_PACKAGE}" | jq '."latest-status"' | sed "s/\"//g")
+  ABANDONED=$(echo "${COMPOSER_PACKAGE}" | jq '."abandoned"' | sed "s/\"//g")
+  PATCHES=$(echo "$COMPOSER_CONTENTS" | jq '.extra.patches."'"$PROJECT_NAME"'" | length')
+
+  local PATCH_LIST=
+  if [ "$PATCHES" -gt 0 ]; then
+    PATCH_LIST=$(echo "$COMPOSER_CONTENTS" | jq '.extra.patches."'"$PROJECT_NAME"'"')
+  fi
+
+  local PROJECT_RELEASE_URL=$PROJECT_URL
+  if [[ $LATEST_VERSION != dev-* ]]; then
+     PROJECT_RELEASE_URL=$PROJECT_URL"/releases/"$LATEST_VERSION
+  fi
+
+      # Go through excluded packages and skip them.
+  if [ -n "$UPDATE_EXCLUDE" ]; then
+    local EXCLUDE=
+    for EXCLUDE in $UPDATE_EXCLUDE
+    do
+      if [ "$PROJECT_NAME" == "drupal/$EXCLUDE" ]; then
+        echo "Skipping upgrades for $PROJECT_NAME"
+        SKIP_PROJECT=true
+      fi
+    done
+  fi
+
+  if [ "$UPDATE_TYPE" != "all" ] && [ "$UPDATE_STATUS" != "$UPDATE_TYPE" ]; then
+    echo "Skipping upgrades for $PROJECT_NAME"
+    SKIP_PROJECT=true
+  fi
+
+  if [ $SKIP_PROJECT == false ]; then
+    echo "Update $PROJECT_NAME from $CURRENT_VERSION to $LATEST_VERSION"
+    RESULT_STATUS=$(composer_output "$PROJECT_NAME" "$LATEST_VERSION" "$UPDATE_STATUS" "$PATCH_LIST")
+    # Write specific cases in the highlights summary report.
+    if [ ${#RESULT_STATUS} -gt 20 ]; then
+      RESULT_HIGHLIGHTS+="- **$PROJECT_NAME** have failed to apply a patch: *$RESULT_STATUS*.\n"
+      RESULT_STATUS=$RESULT_PATCH_FAILURE
+    fi
+
+    if [ "$RESULT_STATUS" == "$RESULT_DEPENDENCY_ERROR" ]; then
+      RESULT_HIGHLIGHTS+="- **$PROJECT_NAME** have an unresolved dependency.\n"
+    fi
+  fi
+  # Write entry for all cases.
+  RESULT_TABLE+="| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | [${LATEST_VERSION}]($PROJECT_RELEASE_URL) | $RESULT_STATUS | $PATCHES | $ABANDONED |\n"
 }
 
 # Set default values.
@@ -198,75 +281,23 @@ SUMMARY_OUTPUT_TABLE+="| ------ | ------ | ------ | ------ | ------ | ------ |\n
 # Read composer output. Remove whitespaces - jq 1.5 can break while parsing.
 UPDATES=$(composer outdated "drupal/*" -f json -D --locked --ignore-platform-reqs | sed -r 's/\s+//g');
 
-for UPDATE in $(echo "${UPDATES}" | jq -c '.locked[]'); do
-  PROJECT_NAME=$(echo "${UPDATE}" | jq '."name"' | sed "s/\"//g")
-  PROJECT_URL=$(echo "${UPDATE}" | jq '."homepage"' | sed "s/\"//g")
-  if [ -z "$PROJECT_URL" ] || [ "$PROJECT_URL" == null ]; then
-    PROJECT_URL="https://www.drupal.org/project/drupal"
+# Loop trough other packages.
+for UPDATE_PACKAGE in $(echo "${UPDATES}" | jq -c '.locked[]'); do
+  PROJECT_NAME=$(echo "${UPDATE_PACKAGE}" | jq '."name"' | sed "s/\"//g")
+  # Skip all core packages. Perform core upgrades as last one.
+  if [[ "$PROJECT_NAME" = drupal/core-* ]] || [ "$PROJECT_NAME" = "drupal/core" ]; then
+    continue
   fi
-  CURRENT_VERSION=$(echo "${UPDATE}" | jq '."version"' | sed "s/\"//g")
-  LATEST_VERSION=$(echo "${UPDATE}" | jq '."latest"' | sed "s/\"//g")
-  UPDATE_STATUS=$(echo "${UPDATE}" | jq '."latest-status"' | sed "s/\"//g")
-  ABANDONED=$(echo "${UPDATE}" | jq '."abandoned"' | sed "s/\"//g")
-  PATCHES=$(echo "$COMPOSER_CONTENTS" | jq '.extra.patches."'"$PROJECT_NAME"'" | length')
-
-  PATCH_LIST=
-  if [ "$PATCHES" -gt 0 ]; then
-    PATCH_LIST=$(echo "$COMPOSER_CONTENTS" | jq '.extra.patches."'"$PROJECT_NAME"'"')
-  fi
-
-  PROJECT_RELEASE_URL=$PROJECT_URL
-  if [[ $LATEST_VERSION != dev-* ]]; then
-     PROJECT_RELEASE_URL=$PROJECT_URL"/releases/"$LATEST_VERSION
-  fi
-
-  RESULT=$RESULT_SKIP
-
-  # Go through excluded packages and skip them.
-  if [ -n "$UPDATE_EXCLUDE" ]; then
-    for EXCLUDE in $UPDATE_EXCLUDE
-    do
-      if [ "$PROJECT_NAME" == "drupal/$EXCLUDE" ]; then
-       SUMMARY_OUTPUT_TABLE+="| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | [${LATEST_VERSION}]($PROJECT_RELEASE_URL) | $RESULT | $PATCHES | $ABANDONED |\n"
-       continue
-      fi
-    done
-  fi
-
-  # If we need to skip Drupal core updates.
-  # Still write the latest version for the summary table.
-  if [ "$UPDATE_CORE" == false ]; then
-    if [[ "$PROJECT_NAME" =~ drupal/core-* ]] || [ "$PROJECT_NAME" = "drupal/core" ]; then
-      echo "Skipping upgrades for $PROJECT_NAME"
-      SUMMARY_OUTPUT_TABLE+="| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | [${LATEST_VERSION}]($PROJECT_RELEASE_URL) | $RESULT | $PATCHES | $ABANDONED |\n"
-      continue
-    fi
-  fi
-
-  if [ "$UPDATE_TYPE" == 'all' ]; then
-    echo "Update $PROJECT_NAME from $CURRENT_VERSION to $LATEST_VERSION"
-    RESULT=$(update_project "$PROJECT_NAME" "$CURRENT_VERSION" "$LATEST_VERSION" "$UPDATE_STATUS", "$PATCH_LIST")
-  else
-    if [ "$UPDATE_STATUS" == "$UPDATE_TYPE" ]; then
-      echo "Update $PROJECT_NAME from $CURRENT_VERSION to $LATEST_VERSION"
-      RESULT=$(update_project "$PROJECT_NAME" "$CURRENT_VERSION" "$LATEST_VERSION" "$UPDATE_STATUS", "$PATCH_LIST")
-    else
-      echo "Skipping upgrades for $PROJECT_NAME"
-    fi
-  fi
-
-  # Write specific cases in the highlights summary report.
-  if [ ${#RESULT} -gt 20 ]; then
-    SUMMARY_INSTRUCTIONS+="- **$PROJECT_NAME** had failed to apply a patch: *$RESULT*.\n"
-    RESULT=$RESULT_PATCH_FAILURE
-  fi
-
-  if [ "$RESULT" == "$RESULT_DEPENDENCY_ERROR" ]; then
-    SUMMARY_INSTRUCTIONS+="- **$PROJECT_NAME** had an unresolved dependency.\n"
-  fi
-
-  SUMMARY_OUTPUT_TABLE+="| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | [${LATEST_VERSION}]($PROJECT_RELEASE_URL) | $RESULT | $PATCHES | $ABANDONED |\n"
+  update_project "$UPDATE_PACKAGE" SUMMARY_OUTPUT_TABLE SUMMARY_INSTRUCTIONS
 done
+
+# If we have core updates enabled, these needs to run last in ideal case.
+# It is not going through work for 99.99% of 9.5 to 10 installations.
+# It should be passable between same major versions of D10.
+if [ "$UPDATE_CORE" == true ]; then
+  CORE_PACKAGE=$(echo "${UPDATES}" | jq -c '.locked[] | select(.name == "drupal/core")')
+  update_project "$CORE_PACKAGE" SUMMARY_OUTPUT_TABLE SUMMARY_INSTRUCTIONS
+fi
 
 SUMMARY_INSTRUCTIONS+="\n$SUMMARY_OUTPUT_TABLE"
 
