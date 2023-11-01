@@ -1,11 +1,13 @@
+
+
 ## Description
 Bash script for updating Drupal core and/or contributed modules with Composer. 
-It can be used as GitHub action or as standalone script/integrated in other CI tools.
+It can be used as a GitHub action or as a standalone script/integrated into other CI tools.
 
 ## Features
 * perform minor or major updates to Drupal core / contributed modules
-* options to exclude modules from check, and / or enabling Drupal core checks
-* outputs Markdown table of changes as file or environment variable
+* options to exclude modules from check and/or enable Drupal core checks
+* outputs Markdown table of changes as a file or environment variable
 * can be used as a GitHub action
 * can be used as a standalone script.
 
