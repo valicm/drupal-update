@@ -29,7 +29,7 @@ usage() {
  echo " -t, --type      Options: semver-safe-update or all. Default is semver-safe-update: minor and security upgrades."
  echo " -o, --output    Specify an output file to save summary. Default is none."
  echo " -c, --core      Flag to enable or disable Drupal core upgrades check. Default is true."
- echo " -e, --exclude   Exclude certain modules from updates check. Use comma separated list: token,redirect,pathauto"
+ echo " -e, --exclude   Exclude certain modules from updates check. Use comma-separated list: token,redirect,pathauto"
 }
 
 # Exit with error.
@@ -56,16 +56,16 @@ validate_options() {
     fi
 
     if [ -n "$SUMMARY_FILE" ] && [[ "$SUMMARY_FILE" != *.md ]]; then
-      echo "Error: Summary output file needs to end with .md extension"
+      echo "Error: Summary output file needs to end with .md extension."
       exit_error
     fi
 }
 
 # Validate if all requirements are present.
-# Check existence of composer.json/lock file, composer, sed and jq binaries.
+# Check the existence of composer.json/lock file, composer, sed, and jq binaries.
 validate_requirements() {
   if [ ! -f composer.json ] || [ ! -f composer.lock ]; then
-    echo "Error: composer.json or composer.lock are missing"
+    echo "Error: composer.json or composer.lock are missing."
     exit 1
   fi
 
@@ -81,7 +81,7 @@ validate_requirements() {
 }
 
 # Update project based on composer update status.
-# Mark dev versions as success, because we don't have specific version.
+# Mark dev versions as a success because we don't have a specific version.
 update_project() {
     PROJECT_NAME=$1
     CURRENT_VERSION=$2
@@ -102,7 +102,7 @@ update_project() {
         echo $RESULT_SUCCESS
       ;;
       1)
-        # Do sanity check before comparing patches.
+        # Do a sanity check before comparing patches.
         if [[ $LATEST_VERSION == dev-* ]]; then
           RESULT=$RESULT_SUCCESS
         elif grep -q "$LATEST_VERSION" composer.lock; then
@@ -111,8 +111,8 @@ update_project() {
           RESULT=$RESULT_GENERIC_ERROR
         fi
 
-        # Compare list of patches. We need to compare them, because if previous
-        # one failed, composer install is going to throw error.
+        # Compare the list of patches. We need to compare them because if previous
+        # one failed; composer install is going to throw an error.
         if [ -n "$PATCH_LIST" ]; then
           local PATCH=
           for PATCH in $(echo "${PATCH_LIST}" | jq -c '.[]'); do
@@ -142,7 +142,7 @@ UPDATE_CORE=true
 # Determine if we're running inside GitHub actions.
 GITHUB_RUNNING_ACTION=$GITHUB_ACTIONS
 
-# For GitHub actions use inputs.
+# For GitHub actions, use inputs.
 if [ "$GITHUB_RUNNING_ACTION" == true ]
 then
   UPDATE_TYPE=${INPUT_UPDATE_TYPE}
@@ -178,11 +178,11 @@ while getopts "h:t:c:e:o:" options; do
   esac
 done
 
-# Perform validations of shell scripts arguments and requirements to run script.
+# Perform validations of shell script arguments and requirements to run the script.
 validate_options "$UPDATE_TYPE" "$UPDATE_CORE" "$UPDATE_EXCLUDE" "$SUMMARY_FILE"
 validate_requirements
 
-# If we have list of exclude modules, convert it to loop list.
+# If we have a list of excluded modules, convert it to a loop list.
 if [ -n "$UPDATE_EXCLUDE" ]; then
   UPDATE_EXCLUDE="${UPDATE_EXCLUDE//,/ }"
 fi
@@ -192,7 +192,7 @@ COMPOSER_CONTENTS=$(< composer.json);
 
 SUMMARY_INSTRUCTIONS="### Automated Drupal update summary\n"
 
-# Define variable for writing summary table.
+# Define a variable for writing a summary table.
 SUMMARY_OUTPUT_TABLE="| Project name | Old version | Proposed version | Status | Patches | Abandoned |\n"
 SUMMARY_OUTPUT_TABLE+="| ------ | ------ | ------ | ------ | ------ | ------ |\n"
 # Read composer output. Remove whitespaces - jq 1.5 can break while parsing.
@@ -234,7 +234,7 @@ for UPDATE in $(echo "${UPDATES}" | jq -c '.locked[]'); do
   fi
 
   # If we need to skip Drupal core updates.
-  # Still write latest version for summary table.
+  # Still write the latest version for the summary table.
   if [ "$UPDATE_CORE" == false ]; then
     if [[ "$PROJECT_NAME" =~ drupal/core-* ]] || [ "$PROJECT_NAME" = "drupal/core" ]; then
       echo "Skipping upgrades for $PROJECT_NAME"
@@ -243,7 +243,7 @@ for UPDATE in $(echo "${UPDATES}" | jq -c '.locked[]'); do
     fi
   fi
 
-  if [ "$UPDATE_TYPE" == 'major' ]; then
+  if [ "$UPDATE_TYPE" == 'all' ]; then
     echo "Update $PROJECT_NAME from $CURRENT_VERSION to $LATEST_VERSION"
     RESULT=$(update_project "$PROJECT_NAME" "$CURRENT_VERSION" "$LATEST_VERSION" "$UPDATE_STATUS", "$PATCH_LIST")
   else
@@ -255,14 +255,14 @@ for UPDATE in $(echo "${UPDATES}" | jq -c '.locked[]'); do
     fi
   fi
 
-  # Write specific cases in highlights summary report.
+  # Write specific cases in the highlights summary report.
   if [ ${#RESULT} -gt 20 ]; then
-    SUMMARY_INSTRUCTIONS+="- **$PROJECT_NAME** had failure during applying of patch: *$RESULT*.\n"
+    SUMMARY_INSTRUCTIONS+="- **$PROJECT_NAME** had failed to apply a patch: *$RESULT*.\n"
     RESULT=$RESULT_PATCH_FAILURE
   fi
 
   if [ "$RESULT" == "$RESULT_DEPENDENCY_ERROR" ]; then
-    SUMMARY_INSTRUCTIONS+="- **$PROJECT_NAME** had unresolved dependency.\n"
+    SUMMARY_INSTRUCTIONS+="- **$PROJECT_NAME** had an unresolved dependency.\n"
   fi
 
   SUMMARY_OUTPUT_TABLE+="| [${PROJECT_NAME}](${PROJECT_URL}) | ${CURRENT_VERSION} | [${LATEST_VERSION}]($PROJECT_RELEASE_URL) | $RESULT | $PATCHES | $ABANDONED |\n"
@@ -270,7 +270,7 @@ done
 
 SUMMARY_INSTRUCTIONS+="\n$SUMMARY_OUTPUT_TABLE"
 
-# For GitHub actions use GitHub step summary and environment variable DRUPAL_UPDATES_TABLE.
+# For GitHub actions, use GitHub step summary and environment variable DRUPAL_UPDATES_TABLE.
 if [ "$GITHUB_RUNNING_ACTION" == true ]; then
   echo -e "$SUMMARY_INSTRUCTIONS" >> "$GITHUB_STEP_SUMMARY"
   {
@@ -282,7 +282,7 @@ else
   echo -e "$SUMMARY_INSTRUCTIONS"
 fi
 
-# If we have summary file.
+# If we have a summary file.
 if [ -n "$SUMMARY_FILE" ]; then
   if [ ! -f "$SUMMARY_FILE" ]; then
     touch "$SUMMARY_FILE"
