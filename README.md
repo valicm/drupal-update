@@ -1,8 +1,8 @@
-
-
 ## Description
 Bash script for updating Drupal core and/or contributed modules with Composer. 
 It can be used as a GitHub action or as a standalone script/integrated into other CI tools.
+
+![](https://vallic.com/sites/default/files/2023-11/github_pr.png "GitHub Drupal Upgrades")
 
 ## Features
 * perform minor or major updates to Drupal core / contributed modules
