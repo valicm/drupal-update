@@ -1,0 +1,27 @@
+name: Automated Drupal updates
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  check-available-updates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Check updates
+        id: updates
+        uses: valicm/drupal-update@v3
+
+      - name: create pull-request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          # Create personal token, and add that value under GitHub repository as MY_PERSONAL_TOKEN
+          token: ${{ secrets.MY_PERSONAL_TOKEN }}
+          commit-message: Automated Drupal updates
+          title: Automated Drupal updates
+          body: ${{ env.DRUPAL_UPDATES_TABLE }}
+          branch: drupal-automated-updates
+          delete-branch: true

@@ -2,17 +2,17 @@
 Bash script for updating Drupal core and/or contributed modules with Composer. 
 It can be used as a GitHub action or as a standalone script/integrated into other CI tools.
 
-![](https://vallic.com/sites/default/files/2023-11/github_pr.png "GitHub Drupal Upgrades")
-
 ## Features
 * perform minor or major updates to Drupal core / contributed modules
 * options to exclude modules from check and/or enable Drupal core checks
 * outputs Markdown table of changes as a file or environment variable
+* highlight failed patches
 * can be used as a GitHub action
 * can be used as a standalone script.
 
 
 ## GitHub Action Usage
+![](https://vallic.com/sites/default/files/2023-11/github_example.png "GitHub Drupal Upgrades")
 
 See [action.yml](action.yml)
 
@@ -47,7 +47,7 @@ jobs:
         
       - name: Check updates
         id: updates
-        uses: valicm/drupal-update@v2
+        uses: valicm/drupal-update@v3
 
       - name: create pull-request
         uses: peter-evans/create-pull-request@v5
@@ -62,6 +62,8 @@ jobs:
 ```
 
 ## Standalone script usage
+![](https://vallic.com/sites/default/files/2023-11/local_example.png "GitHub Drupal Upgrades")
+
 | Example                                       | Command                                      |
 |-----------------------------------------------|----------------------------------------------|
 | Run all minor and security updates            | `bash drupal-update.sh`                      |
