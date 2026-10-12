@@ -51,7 +51,11 @@ def main():
                 "go", "build", "-trimpath", "-ldflags",
                 f"-s -w -X main.buildVersion={args.version}", "-o", str(binary), ".",
             ], cwd=ROOT, env=env, check=True)
-            files = [(binary, binary_name)] + [(ROOT / name, name) for name in DOCUMENTS]
+            wrapper = Path(temp) / "drupal-update.sh"
+            wrapper.write_text((ROOT / "drupal-update.sh").read_text().replace(
+                "DEFAULT_RELEASE=latest", f"DEFAULT_RELEASE={args.version}"), encoding="utf-8")
+            wrapper.chmod(0o755)
+            files = [(binary, binary_name), (wrapper, "drupal-update.sh")] + [(ROOT / name, name) for name in DOCUMENTS]
             if system == "windows":
                 with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as handle:
                     for source, name in files:

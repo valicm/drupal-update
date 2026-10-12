@@ -83,16 +83,36 @@ Composer can update transitive dependencies with `--with-all-dependencies`. Prop
 
 The composite action builds the same CLI and runs it in the caller's workspace. It accepts `update_type`, `update_core`, `update_exclude`, `composer_command`, `update_scope`, and `update_packages`, writes the step summary, and exports `DRUPAL_UPDATES_TABLE`. The selected Composer launcher must already be available and its container or runtime must be ready. CLI flags override action input environment variables.
 
+## Legacy Bash compatibility
+
+The `drupal-update.sh` wrapper forwards every argument unchanged, including the old `-t`, `-c`, `-e`, and `-o` flags and new Go CLI flags. It preserves the caller's project directory, stdout/stderr, exit status, and GitHub input environment variables.
+
+```sh
+bash drupal-update.sh -t all -c false -e token,redirect -o summary.md
+```
+
+The wrapper tries, in order: `DRUPAL_UPDATE_BINARY`, a binary beside the script, `drupal-update` on PATH, a local source build when Go is installed, then a verified GitHub release download. A source build runs in the script's checkout; upgrades still run in the caller's Drupal project. A downloaded binary is temporary and removed after the command finishes.
+
+The repository wrapper defaults to the latest **stable** full release. Before the first stable Go release, explicitly choose a Go prerelease:
+
+```sh
+DRUPAL_UPDATE_VERSION=v5.0.0-rc.1 bash drupal-update.sh -t minor
+curl -fsSL https://raw.githubusercontent.com/valicm/drupal-update/develop/drupal-update.sh | \
+  DRUPAL_UPDATE_VERSION=v5.0.0-rc.1 bash -s -- -t minor -o summary.md
+```
+
+A release archive includes a wrapper pinned to its exact release and the adjacent binary. Installed/adjacent binaries take precedence over download version selection; use `DRUPAL_UPDATE_BINARY=/path/to/drupal-update` to choose one explicitly. Downloading needs curl, awk, tar (or unzip on Windows Bash), and sha256sum or shasum. Older v1–v4 tags remain unchanged; the wrapper will be available in a subsequent Go release after this change is published. Existing RC binaries do not gain newer CLI options merely by being called through the wrapper.
+
 ## Migration from v4 (Bash) to v5 (Go)
 
-v4 is the last Bash-based release. The Go migration is a new major release: the standalone `drupal-update.sh` entry point is removed. Previous tags remain unchanged.
+v4 is the last Bash-based release. The Go migration is a new major release: the standalone `drupal-update.sh` entry point is retained as a thin compatibility wrapper around the Go CLI. Previous tags remain unchanged.
 
 | v4 usage | Go release equivalent |
 | --- | --- |
-| `bash drupal-update.sh` | `drupal-update` (same default update type) |
-| `bash drupal-update.sh -t all` | `drupal-update -t all` (legacy behavior), or `-t major` for coordinated major updates |
+| `bash drupal-update.sh` | Still supported; forwards to `drupal-update` (same default update type) |
+| `bash drupal-update.sh -t all` | Still supported; legacy `all`, or `-t major` for coordinated major updates |
 | `-c false` / `-e token,redirect` / `-o summary.md` | Same flags on the binary |
-| `curl .../drupal-update.sh \| bash` | Download, verify and run a release binary as described above |
+| `curl .../drupal-update.sh \| bash` | Still supported by the wrapper; pin DRUPAL_UPDATE_VERSION for a prerelease |
 | Host `php`, `composer`, `jq`, `sed`, `grep` | Composer launcher; the Go CLI no longer requires jq/sed/grep |
 | `uses: valicm/drupal-update@v4` | Use the exact Go release tag, e.g. `@v5.0.0-rc.1` during preview |
 

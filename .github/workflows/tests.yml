@@ -28,6 +28,8 @@ jobs:
           php-version: ${{ matrix.php }}
           tools: composer:v2
           coverage: none
+      - name: Check Bash wrapper syntax
+        run: bash -n drupal-update.sh
       - name: Check formatting
         run: |
           unformatted=$(gofmt -l ./*.go)
@@ -51,6 +53,7 @@ jobs:
           sha256sum --check SHA256SUMS
           tar -xzf drupal-update_v5.0.0-ci_linux_amd64.tar.gz
           ./drupal-update --version
+          bash ./drupal-update.sh --version
   workflows:
     name: Validate GitHub workflows
     runs-on: ubuntu-latest
