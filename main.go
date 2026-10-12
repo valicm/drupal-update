@@ -41,10 +41,13 @@ type Outdated struct {
 	Packages []Update `json:"locked"`
 }
 
+var buildVersion = "dev"
+
 func newApp() *cli.App {
 	return &cli.App{
-		Name:  "Drupal Update",
-		Usage: "A tool to perform composer updates of Drupal projects",
+		Name:    "Drupal Update",
+		Version: buildVersion,
+		Usage:   "A tool to perform composer updates of Drupal projects",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "composer-command", Value: "composer", EnvVars: []string{"INPUT_COMPOSER_COMMAND"}, Usage: "Composer launcher, e.g. ddev composer (no shell expansion)"},
 			&cli.StringFlag{Name: "scope", Value: "all", EnvVars: []string{"INPUT_UPDATE_SCOPE"}, Usage: "Update targets: all, core or contrib"},

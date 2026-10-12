@@ -9,19 +9,120 @@ and third-party notices.
 Go CLI port of [valicm/drupal-update](https://github.com/valicm/drupal-update).
 Requires composer.json and composer.lock in the working directory, plus a working Composer launcher. The default uses host Composer; a container launcher can provide PHP and Composer.
 
-Build with `go build -o drupal-update .` (use `-buildvcs=false` in a source directory without usable Git metadata), then run the binary from your Drupal project:
+## Standalone use outside GitHub Actions
+
+Download a binary from [GitHub Releases](https://github.com/valicm/drupal-update/releases). Release archives contain the executable, this guide, the MIT license, and third-party notices. Go is not required to run a downloaded binary; PHP and Composer 2.7+ must be available locally or through your configured launcher.
+
+Available binaries:
+
+| Platform | Architectures | Archive |
+| --- | --- | --- |
+| Linux | amd64, arm64 | `.tar.gz` |
+| macOS (`darwin`) | amd64 (Intel), arm64 (Apple Silicon) | `.tar.gz` |
+| Windows | amd64, arm64 | `.zip` |
+
+Linux/macOS installation (select a published Go release; v4 has no Go binaries):
 
 ```sh
-drupal-update
-drupal-update -t all
+version=v5.0.0-rc.1
+case "$(uname -s)" in
+  Linux) os=linux ;;
+  Darwin) os=darwin ;;
+  *) echo "Use the Windows ZIP instructions below"; exit 1 ;;
+esac
+case "$(uname -m)" in
+  x86_64) arch=amd64 ;;
+  aarch64|arm64) arch=arm64 ;;
+  *) echo "Unsupported architecture"; exit 1 ;;
+esac
+archive="drupal-update_${version}_${os}_${arch}.tar.gz"
+release_url="https://github.com/valicm/drupal-update/releases/download/${version}"
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share/drupal-update/${version}"
+workdir=$(mktemp -d)
+curl -fL "${release_url}/${archive}" -o "${workdir}/${archive}"
+curl -fL "${release_url}/SHA256SUMS" -o "${workdir}/SHA256SUMS"
+(
+  cd "$workdir" || exit 1
+  awk -v name="$archive" '$2 == name' SHA256SUMS > selected-checksum
+  test -s selected-checksum || exit 1
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum --check selected-checksum || exit 1
+  else
+    shasum -a 256 --check selected-checksum || exit 1
+  fi
+  tar -xzf "$archive"
+) && cp "$workdir/drupal-update" "$HOME/.local/bin/drupal-update" \
+  && cp "$workdir/LICENSE" "$workdir/THIRD_PARTY_NOTICES.md" "$workdir/README.md" \
+    "$HOME/.local/share/drupal-update/${version}/"
+export PATH="$HOME/.local/bin:$PATH"
+drupal-update --version
+```
+
+Add `$HOME/.local/bin` to your shell's PATH permanently if needed. The downloaded files remain in the printed/assigned `workdir` for inspection.
+
+On Windows, download the matching ZIP and `SHA256SUMS`, compare the ZIP's SHA-256 with `Get-FileHash`, then use `Expand-Archive` and add the extracted directory to PATH. Keep its license and notice files with the executable. Invoke `drupal-update.exe` from your Drupal project directory.
+
+Run from the directory containing composer.json and composer.lock:
+
+```sh
+cd /path/to/drupal-project
+drupal-update -t security -o security-updates.md
+drupal-update -t minor --scope contrib
+drupal-update -t minor --scope core
+drupal-update --composer-command 'ddev composer' -t minor
 drupal-update -c false -e token,drupal/redirect -o updates.md
 ```
+
+For other CI systems, install the binary and Composer, then run the same commands in the checked-out Drupal project. There is no GitHub dependency at runtime. Markdown goes to stdout and an optional `-o` file; errors return a nonzero exit code. Set `GITHUB_ACTIONS` only when GitHub's summary/environment files are available.
+
+To build from source, install Go 1.21+ and run `go build -o drupal-update .` (use `-buildvcs=false` in a source directory without usable Git metadata). A source build reports version `dev`; release builds embed their full tag.
 
 The default `semver-safe-update` uses Composer's classification and preserves existing constraints. `all` also changes constraints for packages Composer reports as `update-possible`. Core packages are updated together after contributed packages. Existing development requirements remain development requirements. The legacy `all` mode cannot coordinate core-dev in require-dev; use `major` for coordinated core changes.
 
 Composer can update transitive dependencies with `--with-all-dependencies`. Proposed versions in the summary are discovery results, not confirmation of the installed version. Platform requirements remain enforced. Failed package updates produce a nonzero exit code after writing the report; Composer scripts and plugins can modify the project, so use a working branch and review the resulting diff.
 
 The composite action builds the same CLI and runs it in the caller's workspace. It accepts `update_type`, `update_core`, `update_exclude`, `composer_command`, `update_scope`, and `update_packages`, writes the step summary, and exports `DRUPAL_UPDATES_TABLE`. The selected Composer launcher must already be available and its container or runtime must be ready. CLI flags override action input environment variables.
+
+## Migration from v4 (Bash) to v5 (Go)
+
+v4 is the last Bash-based release. The Go migration is a new major release: the standalone `drupal-update.sh` entry point is removed. Previous tags remain unchanged.
+
+| v4 usage | Go release equivalent |
+| --- | --- |
+| `bash drupal-update.sh` | `drupal-update` (same default update type) |
+| `bash drupal-update.sh -t all` | `drupal-update -t all` (legacy behavior), or `-t major` for coordinated major updates |
+| `-c false` / `-e token,redirect` / `-o summary.md` | Same flags on the binary |
+| `curl .../drupal-update.sh \| bash` | Download, verify and run a release binary as described above |
+| Host `php`, `composer`, `jq`, `sed`, `grep` | Composer launcher; the Go CLI no longer requires jq/sed/grep |
+| `uses: valicm/drupal-update@v4` | Use the exact Go release tag, e.g. `@v5.0.0-rc.1` during preview |
+
+GitHub Action migration:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: shivammathur/setup-php@v2
+  with:
+    php-version: '8.3' # Match your project and its required extensions.
+    tools: composer:v2
+- name: Upgrade Drupal core within its current major
+  uses: valicm/drupal-update@v5.0.0-rc.1
+  with:
+    update_type: minor
+    update_scope: core
+    update_exclude: ''
+```
+
+The existing inputs `update_type`, `update_core`, and `update_exclude` remain supported. New inputs are `composer_command`, `update_scope`, and `update_packages`. The Action still exports `DRUPAL_UPDATES_TABLE` and writes the step summary, so existing PR body configuration can remain. The Action builds the CLI with Go 1.25; standalone downloaded binaries do not need Go.
+
+Check these behavior changes when migrating:
+
+- The historical default `semver-safe-update` remains; it is not security-only. Choose `security` explicitly for advisory-affected Drupal targets, or `minor` for stable releases within the current major.
+- PHP/extensions/platform requirements are enforced. The old script used `--ignore-platform-reqs`; configure the correct host or container platform instead.
+- Failed upgrades return nonzero even when a report was written. If a workflow needs to upload a failure report, use an `if: always()` reporting step.
+- Constraint styles are preserved. Minor/major can change requirements and normalize JSON formatting; review their diff. Use `major` rather than legacy `all` when coordinating core-dev in require-dev.
+- Nuclear recovery is an explicit new mode with backups and bounded retries; do not substitute it for a routine scheduled update.
+
+The prerelease tag above is the preview channel. After a stable Go release is published, replace it with that full tag. No floating `v5` Action tag is maintained automatically.
 
 ## Upgrade modes
 
@@ -93,3 +194,24 @@ This is opt-in and is not enabled by the example workflows. Required branch chec
 `fixtures/project_x`, `project_y`, and `project_z` contain supplied manifests and historical locks. Tests copy them into temporary directories and verify that the originals remain unchanged. Coverage includes mixed stable/prerelease/development dependencies, constraint styles and compound alternatives, coordinated core release packages including core-recipe-unpack and require-dev, transitive security targets, full lock rollback, and removal of one identified inline patch.
 
 Most upgrade scenarios use controlled Composer responses against the complete project files so they run without private repositories, old PHP versions, downloads, scripts or plugins. Real Composer additionally inspects all fixture locks and validates their manifests offline. Project X intentionally retains its stale lock baseline. A fixture-derived compound-constraint test also exercises the real solver on local metapackages, including rollback when a major target lies outside the retained alternatives. These tests do not establish that the complete sites can currently install or upgrade against their live repositories.
+
+## CI and binary releases
+
+The Tests workflow runs on pushes to main/develop and pull requests. It checks formatting, race-enabled tests, vet, CLI builds, release packaging, and GitHub workflow syntax. PHP and Composer are installed so real Composer and historical fixture tests run rather than skip.
+
+The Binary release workflow runs for full version tags such as `v5.0.0` or `v5.0.0-rc.1`. It reruns Tests, cross-compiles six binaries, packages licensing notices, generates SHA256SUMS, and publishes the archives to a GitHub release. Tags with a prerelease suffix are published as prereleases; they do not replace the stable release. The first Go release is intended to use major version 5.
+
+Maintainers can build archives locally with:
+
+```sh
+python3 scripts/build-release.py --version v5.0.0 --output /tmp/drupal-update-v5
+```
+
+Use a fresh output directory. To release after tests and review, tag the intended commit and push the tag:
+
+```sh
+git tag -a v5.0.0 -m "Drupal Update v5.0.0"
+git push origin v5.0.0
+```
+
+Publishing a tag starts the release workflow; do not retag an already published version. No fixture project files are included in binary archives.
