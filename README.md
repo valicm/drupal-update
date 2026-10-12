@@ -1,5 +1,11 @@
 # Drupal Update
 
+The updater is licensed under [MIT](LICENSE). Earlier GPL releases retain their
+original license. Third-party dependencies retain their licenses; see
+[third-party notices](THIRD_PARTY_NOTICES.md). The supplied project fixtures are
+excluded from this relicensing and retain their existing licensing declarations
+and third-party notices.
+
 Go CLI port of [valicm/drupal-update](https://github.com/valicm/drupal-update).
 Requires composer.json and composer.lock in the working directory, plus a working Composer launcher. The default uses host Composer; a container launcher can provide PHP and Composer.
 
