@@ -1,0 +1,45 @@
+# Copy to .github/workflows/drupal-module-updates.yml in the Drupal project.
+# Replace UPDATE_ACTION_REF with the tag or commit containing this Go version.
+name: Individual Drupal module updates
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '29 3 * * *'
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: drupal-per-module-updates
+  cancel-in-progress: false
+jobs:
+  module:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # Replace with the direct contributed packages used by your project.
+      matrix:
+        package: [token, pathauto, redirect]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+      - uses: valicm/drupal-update@UPDATE_ACTION_REF
+        with:
+          update_type: minor
+          update_scope: contrib
+          update_packages: ${{ matrix.package }}
+      # Add project-specific validation here before creating the PR.
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: updates/drupal-${{ matrix.package }}
+          title: Update drupal/${{ matrix.package }}
+          commit-message: Update drupal/${{ matrix.package }}
+          body: ${{ env.DRUPAL_UPDATES_TABLE }}
+          add-paths: |
+            composer.json
+            composer.lock
+            patches.lock.json
+          delete-branch: true

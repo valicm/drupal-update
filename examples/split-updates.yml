@@ -1,0 +1,51 @@
+# Copy to .github/workflows/drupal-updates.yml in the Drupal project.
+# Replace UPDATE_ACTION_REF with the tag or commit containing this Go version.
+name: Separate Drupal core and contrib updates
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */4 * * *'
+    - cron: '43 2 * * *'
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: drupal-split-updates
+  cancel-in-progress: false
+jobs:
+  updates:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [core, contrib]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch' || (matrix.scope == 'core' && github.event.schedule == '17 */4 * * *') || (matrix.scope == 'contrib' && github.event.schedule == '43 2 * * *')
+      - uses: shivammathur/setup-php@v2
+        if: github.event_name == 'workflow_dispatch' || (matrix.scope == 'core' && github.event.schedule == '17 */4 * * *') || (matrix.scope == 'contrib' && github.event.schedule == '43 2 * * *')
+        with:
+          php-version: '8.3' # Match your project's platform and extension requirements.
+          tools: composer:v2
+      - name: Update selected scope
+        id: updates
+        if: github.event_name == 'workflow_dispatch' || (matrix.scope == 'core' && github.event.schedule == '17 */4 * * *') || (matrix.scope == 'contrib' && github.event.schedule == '43 2 * * *')
+        uses: valicm/drupal-update@UPDATE_ACTION_REF
+        with:
+          update_type: minor
+          update_scope: ${{ matrix.scope }}
+      # Add project-specific validation here before creating the PR.
+      - uses: peter-evans/create-pull-request@v8
+        if: steps.updates.outcome == 'success'
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: updates/drupal-${{ matrix.scope }}
+          title: Drupal ${{ matrix.scope }} updates
+          commit-message: Update Drupal ${{ matrix.scope }}
+          body: ${{ env.DRUPAL_UPDATES_TABLE }}
+          add-paths: |
+            composer.json
+            composer.lock
+            patches.lock.json
+          delete-branch: true

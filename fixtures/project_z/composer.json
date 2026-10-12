@@ -1,0 +1,217 @@
+{
+    "name": "centarro/commerce-kickstart-project",
+    "description": "Centarro Commerce Kickstart 5.x project template",
+    "type": "project",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "Centarro",
+            "role": "info@centarro.io"
+        }
+    ],
+    "repositories": {
+        "block_visibility_conditions": {
+            "type": "vcs",
+            "url": "https://git.drupalcode.org/issue/block_visibility_conditions-3450896.git"
+        },
+        "jquery-ui-touch-punch": {
+            "type": "package",
+            "package": {
+                "name": "furf/jquery-ui-touch-punch",
+                "version": "0.2.3",
+                "type": "drupal-library",
+                "dist": {
+                    "type": "zip",
+                    "url": "https://github.com/furf/jquery-ui-touch-punch/archive/4bc009145202d9c7483ba85f3a236a8f3470354d.zip"
+                }
+            }
+        },
+        "drupal": {
+            "type": "composer",
+            "url": "https://packages.drupal.org/8"
+        }
+    },
+    "config": {
+        "bin-dir": "bin",
+        "sort-packages": true,
+        "allow-plugins": {
+            "composer/installers": true,
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "cweagans/composer-patches": true,
+            "drupal/core-composer-scaffold": true,
+            "drupal/core-project-message": true,
+            "drupal/core-recipe-unpack": true,
+            "oomphinc/composer-installers-extender": true,
+            "phpstan/extension-installer": true,
+            "php-http/discovery": true,
+            "symfony/runtime": true,
+            "tbachert/spi": true
+        },
+        "audit": {
+            "ignore": ["PKSA-y2cr-5h3j-g3ys", "PKSA-2kqm-ps5x-s4f5"]
+        }
+    },
+    "require": {
+        "php": ">=8.3",
+        "ext-curl": "*",
+        "centarro/certified-projects": "^3.0",
+        "centarro/commerce_kickstart": "^5.1",
+        "composer/installers": "^2.0",
+        "cweagans/composer-patches": "^1.7",
+        "drupal/admin_toolbar": "^3",
+        "drupal/advancedqueue": "^1.3",
+        "drupal/belgrade": "^3",
+        "drupal/better_exposed_filters": "^7.0",
+        "drupal/block_visibility_conditions": "dev-3450896-d11",
+        "drupal/bootstrap_layout_builder": "^2",
+        "drupal/coffee": "^2",
+        "drupal/commerce": "^3",
+        "drupal/commerce_currency_resolver": "2.0.x-dev@dev",
+        "drupal/commerce_exchanger": "2.0.x-dev@dev",
+        "drupal/commerce_fee": "^1.1",
+        "drupal/commerce_kickstart_demo_assets": "^1",
+        "drupal/commerce_shipping": "^2 || ^3",
+        "drupal/commerce_stripe": "2.x-dev@dev",
+        "drupal/commerce_variation_bundle": "1.0.x-dev@dev",
+        "drupal/config_split": "^2.0",
+        "drupal/core": "^11",
+        "drupal/core-composer-scaffold": "^11",
+        "drupal/core-project-message": "^11",
+        "drupal/core-recipe-unpack": "^11",
+        "drupal/core-recommended": "^11",
+        "drupal/core_views_facets": "^2.1",
+        "drupal/facets_pretty_paths": "^2.0",
+        "drupal/field_group": "^3.6 || ^4",
+        "drupal/geoip": "3.1.x-dev@dev",
+        "drupal/gin": "^5",
+        "drupal/gin_toolbar": "^3",
+        "drupal/image_delta_formatter": "^1.3",
+        "drupal/inline_block_title_automatic": "^2.0",
+        "drupal/jquery_ui_touch_punch": "^1.1",
+        "drupal/layout_builder_blocks": "^1.1",
+        "drupal/layout_builder_lock": "^2",
+        "drupal/layout_builder_modal": "^2.0",
+        "drupal/layout_builder_operation_link": "^2.2",
+        "drupal/layout_builder_restrictions": "^3.0",
+        "drupal/recipe_tracker": "^1",
+        "drupal/search_api": "^1.38",
+        "drupal/section_library": "^1",
+        "drupal/symfony_mailer": "^1.2",
+        "drupal/token": "^1.15",
+        "drush/drush": "^13",
+        "furf/jquery-ui-touch-punch": "0.2.3",
+        "oomphinc/composer-installers-extender": "^2.0",
+        "stripe/stripe-php": "21.2.0 as 15.99.0",
+        "vlucas/phpdotenv": "^5.1",
+        "webflo/drupal-finder": "^1.2",
+        "webmozart/path-util": "^2.3"
+    },
+    "require-dev": {
+        "drupal/core-dev": "^11",
+        "palantirnet/drupal-rector": "^1.1"
+    },
+    "conflict": {
+        "drupal/drupal": "*"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "classmap": [
+            "scripts/composer/ScriptHandler.php"
+        ],
+        "files": ["load.environment.php"]
+    },
+     "scripts": {
+        "drupal-scaffold": "DrupalComposer\\DrupalScaffold\\Plugin::scaffold",
+        "pre-install-cmd": [
+            "DrupalProject\\composer\\ScriptHandler::checkComposerVersion"
+        ],
+        "pre-update-cmd": [
+            "DrupalProject\\composer\\ScriptHandler::checkComposerVersion"
+        ],
+        "post-install-cmd": [
+            "DrupalProject\\composer\\ScriptHandler::createRequiredFiles"
+        ],
+        "post-update-cmd": [
+            "DrupalProject\\composer\\ScriptHandler::createRequiredFiles"
+        ],
+        "phpcs": "phpcs",
+        "phpcbf": "phpcbf",
+        "phpstan": "phpstan analyse --memory-limit=2G",
+        "rector": "rector process --dry-run",
+        "rector:fix": "rector process",
+        "test": "ddev phpunit --group commerce_variation_bundle",
+        "lint": [
+            "@phpcs",
+            "@phpstan"
+        ]
+    },
+    "scripts-descriptions": {
+        "phpcs": "Check the coding standards of the modules under development.",
+        "phpcbf": "Auto-fix coding standards violations.",
+        "phpstan": "Statically analyse the modules under development.",
+        "rector": "Preview the automated upgrades Rector would apply.",
+        "rector:fix": "Apply Rector's automated upgrades.",
+        "test": "Run the PHPUnit tests of the modules under development, inside DDEV.",
+        "lint": "Run phpcs and phpstan."
+    },
+    "extra": {
+        "composer-exit-on-patch-failure": true,
+        "patches": {},
+        "patchLevel": {
+            "drupal/core": "-p2",
+            "drupal/default_content": "-p1"
+        },
+        "drupal-scaffold": {
+            "locations": {
+                "web-root": "web/"
+            },
+            "overwrite": true,
+            "file-mapping": {
+                "[web-root]/libraries/jquery-ui-touch-punch/jquery.ui.touch-punch.min.js": "libraries/jquery-ui-touch-punch/jquery.ui.touch-punch.min.js"
+            }
+        },
+        "installer-paths": {
+            "web/core": ["type:drupal-core"],
+            "libraries/{$name}": [
+                "furf/jquery-ui-touch-punch"
+            ],
+            "web/libraries/{$name}": [
+                "type:drupal-library"
+            ],
+            "web/modules/contrib/{$name}": [
+                "type:drupal-module"
+            ],
+            "web/profiles/contrib/{$name}": [
+                "type:drupal-profile"
+            ],
+            "web/themes/contrib/{$name}": [
+                "type:drupal-theme"
+            ],
+            "drush/Commands/contrib/{$name}": [
+                "type:drupal-drush"
+            ],
+            "recipes/{$name}": [
+                "type:drupal-recipe"
+            ]
+        },
+         "drupal-core-project-message": {
+            "include-keys": ["homepage", "support"],
+            "post-create-project-cmd-message": [
+                "<bg=magenta;fg=white>                                                      </>",
+                "<bg=magenta;fg=white>  Congratulations, you installed Commerce Kickstart!  </>",
+                "<bg=magenta;fg=white>                                                      </>",
+                "",
+                "<bg=yellow;fg=black>Next steps</>:",
+
+                "  * Install the site: https://www.drupal.org/docs/installing-drupal",
+                "  * Read the Drupal Commerce docs: https://docs.drupalcommerce.org/v2/user-guide/",
+                "  * Get support: https://drupal.stackexchange.com/",
+                "  * Get involved with the Drupal community:",
+                "      https://www.drupal.org/getting-involved",
+                "  * Remove the plugin that prints this message:",
+                "      composer remove drupal/core-project-message"
+            ]
+        }
+    }
+}

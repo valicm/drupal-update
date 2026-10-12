@@ -1,31 +1,43 @@
-name: 'Drupal Composer updates'
-description: 'Used to perform updates of Drupal core and/or contributed modules'
-author: 'valicm'
-branding:
-  icon: check-circle
-  color: blue
+name: Drupal Composer updates
+description: Update Drupal packages using the Go CLI
+author: valicm
 inputs:
   update_type:
-    description: 'Are we doing minor or major updates. Allowed values are semver-safe-update or all'
-    required: false
-    default: 'semver-safe-update'
+    description: 'security, minor, major, nuclear, semver-safe-update or all'
+    default: semver-safe-update
   update_core:
-    description: 'Skip checking for Drupal core updates. Default true'
-    required: false
+    description: Include Drupal core updates
     default: 'true'
   update_exclude:
-    description: 'Modules excluded from checks. Use comma separated list: token,redirect,pathauto'
-    required: false
+    description: Comma-separated package or module names
+    default: ''
+  composer_command:
+    description: Composer launcher, for example ddev composer
+    default: composer
+  update_scope:
+    description: all, core or contrib
+    default: all
+  update_packages:
+    description: Comma-separated packages or module names to update
+    default: ''
 runs:
-  using: "composite"
+  using: composite
   steps:
-    - run: echo "INPUT_UPDATE_TYPE=${{ inputs.update_type }}" >> $GITHUB_ENV
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.25.x'
+        cache: false
+    - name: Build updater
       shell: bash
-    - run: echo "INPUT_UPDATE_CORE=${{ inputs.update_core }}" >> $GITHUB_ENV
+      working-directory: ${{ github.action_path }}
+      run: go build -o "$RUNNER_TEMP/drupal-update" .
+    - name: Update Drupal
       shell: bash
-    - run: echo "INPUT_UPDATE_EXCLUDE=${{ inputs.update_exclude }}" >> $GITHUB_ENV
-      shell: bash
-    - run: chmod +x ${{ github.action_path }}/drupal-update.sh
-      shell: bash
-    - run: $GITHUB_ACTION_PATH/drupal-update.sh
-      shell: bash
+      env:
+        INPUT_UPDATE_TYPE: ${{ inputs.update_type }}
+        INPUT_UPDATE_CORE: ${{ inputs.update_core }}
+        INPUT_UPDATE_EXCLUDE: ${{ inputs.update_exclude }}
+        INPUT_COMPOSER_COMMAND: ${{ inputs.composer_command }}
+        INPUT_UPDATE_SCOPE: ${{ inputs.update_scope }}
+        INPUT_UPDATE_PACKAGES: ${{ inputs.update_packages }}
+      run: '"$RUNNER_TEMP/drupal-update"'
