@@ -1,5 +1,5 @@
 # Copy to .github/workflows/drupal-updates.yml in the Drupal project.
-# Replace UPDATE_ACTION_REF with the tag or commit containing this Go version.
+# Uses the published Go prerelease; replace it with a stable Go tag when available.
 name: Separate Drupal core and contrib updates
 on:
   workflow_dispatch:
@@ -31,7 +31,7 @@ jobs:
       - name: Update selected scope
         id: updates
         if: github.event_name == 'workflow_dispatch' || (matrix.scope == 'core' && github.event.schedule == '17 */4 * * *') || (matrix.scope == 'contrib' && github.event.schedule == '43 2 * * *')
-        uses: valicm/drupal-update@UPDATE_ACTION_REF
+        uses: valicm/drupal-update@v5.0.0-rc.1
         with:
           update_type: minor
           update_scope: ${{ matrix.scope }}

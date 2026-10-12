@@ -1,5 +1,5 @@
 # Copy to .github/workflows/drupal-module-updates.yml in the Drupal project.
-# Replace UPDATE_ACTION_REF with the tag or commit containing this Go version.
+# Uses the published Go prerelease; replace it with a stable Go tag when available.
 name: Individual Drupal module updates
 on:
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
         with:
           php-version: '8.3'
           tools: composer:v2
-      - uses: valicm/drupal-update@UPDATE_ACTION_REF
+      - uses: valicm/drupal-update@v5.0.0-rc.1
         with:
           update_type: minor
           update_scope: contrib

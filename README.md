@@ -172,22 +172,42 @@ drupal-update -t major --packages token,drupal/redirect
 
 Scopes are `all` (default), `core`, and `contrib`. Package names can be full names or Drupal module names. Selecting any core package selects the core group so its required release packages stay coordinated. Exclusions and `--core false` still apply; `--scope core --core false` is rejected. Selecting an unknown locked package is an error. These filters choose update targets; necessary transitive dependency changes can still appear in a PR.
 
-The [split update workflow](examples/split-updates.yml) checks core every four hours and grouped contrib daily. The [per-module workflow](examples/per-module-updates.yml) creates separate branches for a configurable module matrix. Both use a stable branch per group or module, preventing a new PR on every run. Copy an example to the Drupal project's .github/workflows directory, replace `UPDATE_ACTION_REF` with a tag or commit containing this Go version, and set the PHP version/extensions and validation steps for that project. The current published v4 action does not include these new inputs. Adapt `add-paths` to include any scaffolded or generated project files that must be committed; backups are intentionally excluded.
+### Scheduled examples using the published RC
 
-The examples use GITHUB_TOKEN. Enable permission for Actions to create PRs in the repository; use an appropriate GitHub App token or repository secret if the PR must trigger further workflows, since events generated with GITHUB_TOKEN generally do not trigger other workflows. PR creation and automerge run in the caller's workflow, not in the CLI.
+The RC is also a GitHub Action: use `valicm/drupal-update@v5.0.0-rc.1`. Action references resolve the repository tag and its action.yml; using the Action does not require downloading a release archive. The RC tag is published and immutable. Copy the chosen example into your Drupal project's `.github/workflows/`, then configure its PHP/extensions, automation token, and project checks.
 
-For optional automerge, give the create-pull-request step `id: pr`, enable repository automerge and required checks, then add:
+| Example | Schedule (UTC) | Targets | Merge behavior |
+| --- | --- | --- | --- |
+| [Security updates](examples/security-updates.yml) | Daily, 04:23 | Advisory-affected Drupal core and contrib | Automerge after required checks/reviews |
+| [Minor and patch updates](examples/minor-updates.yml) | Fridays, 04:31 | Stable releases within each direct Drupal package's current major | Review PR |
+| [Core major updates](examples/core-major-updates.yml) | Fridays, 04:47, in June/August/December of even years | Drupal core group, stable newer majors only | Review PR |
+| [General/manual updates](examples/general-updates.yml) | Manual | Choose security/minor/major/legacy all, scope, and packages | Review PR |
 
-```yaml
-- name: Enable automerge after required checks pass
-  if: steps.pr.outputs.pull-request-number && steps.pr.outputs.pull-request-operation == 'created'
-  env:
-    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
-  run: gh pr merge "$PR_NUMBER" --auto --squash
-```
+The [Drupal core release schedule](https://www.drupal.org/about/core/policies/core-release-cycles/schedule) normally places security windows on the third Wednesday, but security releases can occur outside that window. Daily polling also covers contributed project advisories. Core bugfix windows normally surround the first Wednesday; Friday minor checks run after that window and include patches throughout the month.
 
-This is opt-in and is not enabled by the example workflows. Required branch checks must reflect your site's validation needs.
+The [core release policy](https://www.drupal.org/about/core/policies/core-release-cycles/release-process-overview) places majors in even years, potentially in June, August, or December. The core-major example polls these months rather than assuming a fixed release date; a poll does not imply a release exists. The current schedule lists Drupal 12.0.0 and 11.5.0 for the week of December 7, 2026. `major` targets 12.0.0 when available; `minor` can select 11.5.0 while staying on Drupal 11. Neither mode selects a Drupal prerelease target simply because the updater itself uses an RC tag. Review the linked schedule when Drupal changes its release policy; manual dispatch remains available outside these windows.
+
+For a monthly contributed-major cadence, copy the core-major example, remove its `window` job and the update job's `needs`/`if`, change the cron to `47 4 1 * *`, and change `update_scope` to `contrib` (or `all` for monthly major checks across core and contrib). The general/manual workflow also supports this without a schedule. All examples maintain stable PR branches so reruns update existing PRs.
+
+The earlier [split core/contrib](examples/split-updates.yml) and [per-module](examples/per-module-updates.yml) examples remain available for more granular PRs and now reference the published RC as well.
+
+### Security automerge setup
+
+The new scheduled/manual examples expect a repository secret named `DRUPAL_UPDATE_TOKEN`, normally a fine-grained PAT from an automation account with **Contents: read/write** and **Pull requests: read/write** for the Drupal repository. A GitHub App installation token generated during the job can be used instead: replace the secret references with that token-generating step's output. Do not store an expiring installation token as a permanent secret.
+
+Using this token for checkout and PR creation lets the resulting PR events trigger the repository's PR validation workflows. The default `GITHUB_TOKEN` generally does not trigger those further workflow runs; see the [create-pull-request token guidance](https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#triggering-further-workflow-runs).
+
+For the daily security example:
+
+1. Enable repository automerge and squash merging.
+2. Configure required checks on the base branch for your Drupal site's validation, and required reviews if your policy needs them. These checks must run for the automation PRs.
+3. Set `DRUPAL_UPDATE_TOKEN`, match PHP/extensions to the project, and add site-specific tests where the example indicates.
+
+The workflow validates Composer files/platform, creates the security PR, and enables `gh pr merge --auto --squash` for the exact PR head. [GitHub automerge](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/automatically-merging-a-pull-request) waits for required checks/reviews. Without required checks, a mergeable PR can merge immediately; the example does not invent site-level checks or bypass branch protection. Minor, major, and manual examples never enable automerge.
+
+Security mode covers Drupal advisories reported by Composer under the existing constraints. It does not fix unrelated non-Drupal packages or force a major jump when current constraints block the fix. A blocked update fails and requires a reviewed constraint change. Necessary dependency moves can still accompany a security fix.
+
+The new examples commit project changes, including scaffolded files, while excluding `.drupal-update-backup-*`; normal Git ignore rules still apply. Adjust their `add-paths` for your repository's layout. Schedules run from the default branch, so merge the copied workflows into that branch to activate them. GitHub's scheduled runs can be delayed; the times above are polling times, not guaranteed deployment times.
 
 ## Real project regression fixtures
 
