@@ -152,6 +152,34 @@ Composer command behavior follows the [official CLI documentation](https://getco
 
 Upgrades keep simple constraint styles: `^1.0` becomes `^2.0.0`, `~1.0` becomes `~2.0.0`, `1.*` becomes `2.*`, and exact `1.0.0` becomes exact `2.0.0`. Stability suffixes such as `@beta` are retained. Minor and major modes use temporary exact Composer update targets to install the chosen release while leaving the broader constraint in composer.json. Minor and major modes retain compound alternatives such as `^2 || ^3`; Composer rejects a temporary target outside those alternatives and the manifests and locks are restored. Other complex constraints and aliases are not automatically rewritten. The legacy `all` mode rejects unsupported complex constraints. Security and semver-safe updates do not rewrite requirements; nuclear may deliberately relax them to `*`.
 
+## Composer failure summaries and patch handling
+
+Failure summaries retain Composer's line breaks in a fenced diagnostic block. ANSI colors and GitHub annotation wrappers are removed, escaped annotation newlines are decoded, and duplicate annotation/plain errors are shown once. A dependency or PHP platform error remains a failure; patch options do not bypass it. For example, a locked google/recaptcha version requiring PHP 8.4 cannot be installed by a PHP 8.3 runner: match the runner to the project's intended platform or resolve the lock for that platform.
+
+```sh
+drupal-update -t minor --skip-patched
+drupal-update -t minor --patch-failure skip
+```
+
+Equivalent GitHub Action inputs (available after this change is released; use the develop branch for testing after pushing):
+
+```yaml
+- uses: valicm/drupal-update@develop
+  with:
+    update_type: minor
+    skip_patched: 'true'
+    # Alternative: omit skip_patched and attempt updates, retrying on identified patch failures.
+    # patch_failure: skip
+```
+
+- `skip_patched` / `--skip-patched`: omit targets with configured patches. Supports inline legacy/expanded definitions and an external `extra.patches-file`. A patch on drupal/core skips the core update group. Definitions remain unchanged. This filters requested targets; necessary transitive changes can still affect patched dependencies.
+- `patch_failure: skip` / `--patch-failure skip`: minor/major modes only. If Composer fails to apply a patch and its output identifies exactly one configured patched package that was selected, restore the original manifests and locks, skip that package (or core group), and retry the remaining targets. Each retry removes a target, so retries are bounded. Ambiguous, unselected, or unidentified patch failures still fail; platform/dependency errors are never skipped.
+- Default `patch_failure: fail`: retain the existing failure/rollback behavior. Security runs keep failing on unsuccessful security fixes; skip-on-failure is not supported for security mode. Explicitly skipping patched security targets leaves their advisories unresolved and reports them as skipped.
+
+Skipping patches here means skipping upgrade targets, not disabling the patch plugin or stripping patch definitions. Nuclear mode remains the explicit option that can remove identified inline patches. The patch skip options cannot be combined with nuclear mode. Manifest/lock rollback does not restore installed files; inspect skipped results and reconcile installation with composer install before using them.
+
+The immutable v5.0.0-rc.1 tag does not contain these new options or the improved summaries. Use a subsequent release tag once published; do not move the existing RC tag.
+
 ## Container Composer (#12)
 
 ```sh

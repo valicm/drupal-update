@@ -20,6 +20,12 @@ inputs:
   update_packages:
     description: Comma-separated packages or module names to update
     default: ''
+  skip_patched:
+    description: Skip update targets with configured patches
+    default: 'false'
+  patch_failure:
+    description: fail or skip (skip is supported for minor/major only)
+    default: fail
 runs:
   using: composite
   steps:
@@ -40,4 +46,6 @@ runs:
         INPUT_COMPOSER_COMMAND: ${{ inputs.composer_command }}
         INPUT_UPDATE_SCOPE: ${{ inputs.update_scope }}
         INPUT_UPDATE_PACKAGES: ${{ inputs.update_packages }}
+        INPUT_SKIP_PATCHED: ${{ inputs.skip_patched }}
+        INPUT_PATCH_FAILURE: ${{ inputs.patch_failure }}
       run: '"$RUNNER_TEMP/drupal-update"'

@@ -270,7 +270,7 @@ func runMode(mode, core, exclude, output string) (result error) {
 	fmt.Fprintf(&report, "### Drupal %s upgrade\n\n", mode)
 	defer func() {
 		if result != nil {
-			fmt.Fprintf(&report, "\nFailure: %s\n", cell(result.Error()))
+			report.WriteString(failureMarkdown(result.Error()))
 		}
 		result = errors.Join(result, modeReport(report.String(), output))
 	}()
@@ -284,10 +284,18 @@ func runMode(mode, core, exclude, output string) (result error) {
 			return e
 		}
 	}
+	patches, e := configuredPatches(m)
+	if e != nil {
+		return e
+	}
 	roots := requirements(m)
 	var names []string
 	for n := range locked {
 		if strings.HasPrefix(n, "drupal/") && !excludedPackage(n, core, exclude) {
+			if skipPatched && hasPatches(n, patches) {
+				fmt.Fprintf(&report, "- Skipped %s: configured patches retained.\n", packageLink(n))
+				continue
+			}
 			if mode == "security" {
 				if affected[n] {
 					names = append(names, n)
@@ -367,37 +375,43 @@ func runMode(mode, core, exclude, output string) (result error) {
 		}
 	}()
 	for _, n := range args {
-		if target := targets[n]; target != "" {
-			constraint, e := modeConstraint(roots[n], target)
-			if e != nil {
-				return fmt.Errorf("%s: %w", n, e)
-			}
-			if e := setConstraint(m, n, constraint); e != nil {
-				return e
-			}
-			fmt.Fprintf(&report, "- %s: %s → %s\n", packageLink(n), cell(locked[n]), releaseLink(n, target))
+		if targets[n] != "" {
+			fmt.Fprintf(&report, "- Selected %s: %s → %s\n", packageLink(n), cell(locked[n]), releaseLink(n, targets[n]))
 		} else {
-			fmt.Fprintf(&report, "- Security update: %s (%s)\n", packageLink(n), cell(locked[n]))
+			fmt.Fprintf(&report, "- Selected security update %s (%s)\n", packageLink(n), cell(locked[n]))
 		}
 	}
-	if len(targets) > 0 {
-		if e := writeManifest(m); e != nil {
+	for len(args) > 0 {
+		log, updateErr := applyUpdateTargets(m, roots, args, targets)
+		if updateErr == nil {
+			break
+		}
+		failed := ""
+		if patchFailurePolicy == "skip" && isPatchFailure(log) {
+			failed = failedPatchTarget(log, patches, args)
+		}
+		if failed == "" {
+			return fmt.Errorf("update failed: %w\n%s", updateErr, log)
+		}
+		if e := backup.restore(); e != nil {
 			return e
 		}
-	}
-	command := []string{"update"}
-	for _, n := range args {
-		if targets[n] != "" {
-			command = append(command, n+":"+targets[n])
-		} else {
-			command = append(command, n)
+		m, e = readManifest()
+		if e != nil {
+			return e
 		}
+		fmt.Fprintf(&report, "- Skipped %s after a patch failure; restored manifests and locks before retrying.\n", packageLink(failed))
+		remaining := []string{}
+		for _, n := range args {
+			if n != failed && !(isCore(n) && isCore(failed)) {
+				remaining = append(remaining, n)
+			}
+		}
+		args = remaining
 	}
-	command = append(command, "--with-all-dependencies", "--minimal-changes", "--no-interaction", "--no-progress")
-	stdout, stderr, e := runComposer(command...)
-	if e != nil {
-		report.WriteString("\nUpdate failed.\n")
-		return fmt.Errorf("update failed: %w\n%s%s", e, stdout, stderr)
+	if len(args) == 0 {
+		report.WriteString("\nAll selected upgrades were skipped after patch failures. No manifests or locks were changed. Installed files may need reconciliation with composer install.\n")
+		return nil
 	}
 	if mode == "security" {
 		remaining, e := auditPackages()

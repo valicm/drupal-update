@@ -41,7 +41,7 @@ func nuclear(m manifest, report *strings.Builder) (result error) {
 			report.WriteString("\nComposer install completed. Review every constraint and patch change before using this result.\n")
 			return nil
 		}
-		log := string(stdout) + stderr
+		log := cleanComposerOutput(string(stdout), stderr)
 		patchFailure := strings.Contains(strings.ToLower(log), "could not apply patch") || strings.Contains(strings.ToLower(log), "cannot apply patch") || strings.Contains(strings.ToLower(log), "could not be applied")
 		if patchFailure {
 			removed, e := removeFailedPatch(m, log)

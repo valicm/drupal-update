@@ -49,6 +49,8 @@ func newApp() *cli.App {
 		Version: buildVersion,
 		Usage:   "A tool to perform composer updates of Drupal projects",
 		Flags: []cli.Flag{
+			&cli.BoolFlag{Name: "skip-patched", EnvVars: []string{"INPUT_SKIP_PATCHED"}, Usage: "Skip update targets with configured inline or external patches"},
+			&cli.StringFlag{Name: "patch-failure", Value: "fail", EnvVars: []string{"INPUT_PATCH_FAILURE"}, Usage: "Patch failure policy: fail or skip (minor/major only)"},
 			&cli.StringFlag{Name: "composer-command", Value: "composer", EnvVars: []string{"INPUT_COMPOSER_COMMAND"}, Usage: "Composer launcher, e.g. ddev composer (no shell expansion)"},
 			&cli.StringFlag{Name: "scope", Value: "all", EnvVars: []string{"INPUT_UPDATE_SCOPE"}, Usage: "Update targets: all, core or contrib"},
 			&cli.StringFlag{Name: "packages", EnvVars: []string{"INPUT_UPDATE_PACKAGES"}, Usage: "Comma-separated package or module names to update"},
@@ -108,6 +110,19 @@ func newApp() *cli.App {
 			if updateType == "nuclear" && (selection.scope != "all" || len(selection.packages) > 0) {
 				return fmt.Errorf("nuclear cannot restrict scope or packages")
 			}
+			policy := c.String("patch-failure")
+			if policy != "fail" && policy != "skip" {
+				return fmt.Errorf("patch-failure must be fail or skip")
+			}
+			if policy == "skip" && updateType != "minor" && updateType != "major" {
+				return fmt.Errorf("patch-failure=skip is supported for minor and major modes")
+			}
+			if updateType == "nuclear" && c.Bool("skip-patched") {
+				return fmt.Errorf("nuclear cannot skip patched packages")
+			}
+			previousSkip, previousPolicy := skipPatched, patchFailurePolicy
+			skipPatched, patchFailurePolicy = c.Bool("skip-patched"), policy
+			defer func() { skipPatched, patchFailurePolicy = previousSkip, previousPolicy }()
 			previousCommand, previousSelection := composerCommand, activeSelection
 			composerCommand, activeSelection = launcher, selection
 			defer func() { composerCommand, activeSelection = previousCommand, previousSelection }()
@@ -211,6 +226,14 @@ func updateProjects(updateType, core, exclude, output string) error {
 	if err != nil {
 		return err
 	}
+	m, e := readManifest()
+	if e != nil {
+		return e
+	}
+	patches, e := configuredPatches(m)
+	if e != nil {
+		return e
+	}
 	var project struct {
 		Require    map[string]json.RawMessage `json:"require"`
 		RequireDev map[string]json.RawMessage `json:"require-dev"`
@@ -250,7 +273,7 @@ func updateProjects(updateType, core, exclude, output string) error {
 	var failures []error
 	for _, pkg := range packages {
 		status := Skipped
-		skip := excludedPackage(pkg.Name, core, exclude) || (updateType != UpdateAll && pkg.Status != SemverSafeUpdate)
+		skip := (skipPatched && hasPatches(pkg.Name, patches)) || excludedPackage(pkg.Name, core, exclude) || (updateType != UpdateAll && pkg.Status != SemverSafeUpdate)
 		if !skip {
 			args := []string{"update", pkg.Name}
 			if isCore(pkg.Name) {
@@ -305,7 +328,7 @@ func updateProjects(updateType, core, exclude, output string) error {
 					if errors.As(updateErr, &exit) && exit.ExitCode() == 2 {
 						status = DependencyError
 					}
-					log := string(stdout) + stderr
+					log := cleanComposerOutput(string(stdout), stderr)
 					if strings.Contains(strings.ToLower(log), "could not apply patch") || strings.Contains(strings.ToLower(log), "cannot apply patch") {
 						status = PatchFailure
 					}
