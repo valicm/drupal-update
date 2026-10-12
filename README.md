@@ -191,11 +191,25 @@ For a monthly contributed-major cadence, copy the core-major example, remove its
 
 The earlier [split core/contrib](examples/split-updates.yml) and [per-module](examples/per-module-updates.yml) examples remain available for more granular PRs and now reference the published RC as well.
 
-### Security automerge setup
+### Automation token setup
 
 The new scheduled/manual examples expect a repository secret named `DRUPAL_UPDATE_TOKEN`, normally a fine-grained PAT from an automation account with **Contents: read/write** and **Pull requests: read/write** for the Drupal repository. A GitHub App installation token generated during the job can be used instead: replace the secret references with that token-generating step's output. Do not store an expiring installation token as a permanent secret.
 
+Create the fine-grained token under **GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens**:
+
+1. Set **Resource owner** to the account or organization that owns the Drupal repository. For `ORG/site`, choose **ORG**, not your personal account. A token created for your personal account does not grant access to an organization's private repository.
+2. Under **Repository access**, choose **Only select repositories** and select the Drupal repository. The screenshot below shows **All repositories**, but that broader selection is not required for these workflows.
+3. Under **Repository permissions**, select **Contents → Read and write** and **Pull requests → Read and write**. **Metadata → Read-only** is required and included automatically.
+4. Generate the token. If the organization requires approval, have an organization administrator approve it; a **pending** token cannot access its private repositories. The token's user must already have the necessary repository access; token permissions do not grant the user additional access.
+5. In the Drupal repository, open **Settings → Secrets and variables → Actions** and save the generated value as the repository secret **DRUPAL_UPDATE_TOKEN**. If you regenerate the token, replace the secret value too.
+
+![Fine-grained PAT repository access and permissions: Contents and Pull requests read/write, Metadata read-only](docs/images/fine-grained-token-permissions.png)
+
+If checkout fails with HTTP 403 or `Write access to repository not granted`, verify the **resource owner**, selected repository, token permissions, organization approval, and token expiration before changing the workflow. Adding the token as a secret does not grant it repository access. The workflow's YAML `permissions:` setting controls `GITHUB_TOKEN`, not this PAT. See [GitHub's fine-grained PAT guidance](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).
+
 Using this token for checkout and PR creation lets the resulting PR events trigger the repository's PR validation workflows. The default `GITHUB_TOKEN` generally does not trigger those further workflow runs; see the [create-pull-request token guidance](https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#triggering-further-workflow-runs).
+
+### Security automerge setup
 
 For the daily security example:
 

@@ -14,7 +14,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = [(system, arch) for system in ("linux", "darwin", "windows")
            for arch in ("amd64", "arm64")]
-DOCUMENTS = ("LICENSE", "THIRD_PARTY_NOTICES.md", "README.md")
+DOCUMENTS = ("LICENSE", "THIRD_PARTY_NOTICES.md", "README.md",
+             "docs/images/fine-grained-token-permissions.png")
 
 
 def main():
