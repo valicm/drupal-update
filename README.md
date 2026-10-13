@@ -24,7 +24,7 @@ Available binaries:
 Linux/macOS installation (select a published Go release; v4 has no Go binaries):
 
 ```sh
-version=v5.0.0-rc.1
+version=v5.0.0
 case "$(uname -s)" in
   Linux) os=linux ;;
   Darwin) os=darwin ;;
@@ -93,15 +93,15 @@ bash drupal-update.sh -t all -c false -e token,redirect -o summary.md
 
 The wrapper tries, in order: `DRUPAL_UPDATE_BINARY`, a binary beside the script, `drupal-update` on PATH, a local source build when Go is installed, then a verified GitHub release download. A source build runs in the script's checkout; upgrades still run in the caller's Drupal project. A downloaded binary is temporary and removed after the command finishes.
 
-The repository wrapper defaults to the latest **stable** full release. Before the first stable Go release, explicitly choose a Go prerelease:
+The repository wrapper defaults to the latest **stable** full release. To pin v5.0.0 explicitly:
 
 ```sh
-DRUPAL_UPDATE_VERSION=v5.0.0-rc.1 bash drupal-update.sh -t minor
-curl -fsSL https://raw.githubusercontent.com/valicm/drupal-update/develop/drupal-update.sh | \
-  DRUPAL_UPDATE_VERSION=v5.0.0-rc.1 bash -s -- -t minor -o summary.md
+DRUPAL_UPDATE_VERSION=v5.0.0 bash drupal-update.sh -t minor
+curl -fsSL https://raw.githubusercontent.com/valicm/drupal-update/v5.0.0/drupal-update.sh | \
+  DRUPAL_UPDATE_VERSION=v5.0.0 bash -s -- -t minor -o summary.md
 ```
 
-A release archive includes a wrapper pinned to its exact release and the adjacent binary. Installed/adjacent binaries take precedence over download version selection; use `DRUPAL_UPDATE_BINARY=/path/to/drupal-update` to choose one explicitly. Downloading needs curl, awk, tar (or unzip on Windows Bash), and sha256sum or shasum. Older v1–v4 tags remain unchanged; the wrapper will be available in a subsequent Go release after this change is published. Existing RC binaries do not gain newer CLI options merely by being called through the wrapper.
+A release archive includes a wrapper pinned to its exact release and the adjacent binary. Installed/adjacent binaries take precedence over download version selection; use `DRUPAL_UPDATE_BINARY=/path/to/drupal-update` to choose one explicitly. Downloading needs curl, awk, tar (or unzip on Windows Bash), and sha256sum or shasum. Older v1–v4 tags remain unchanged. The v5.0.0 release includes the compatibility wrapper and the new CLI options.
 
 ## Migration from v4 (Bash) to v5 (Go)
 
@@ -112,9 +112,9 @@ v4 is the last Bash-based release. The Go migration is a new major release: the 
 | `bash drupal-update.sh` | Still supported; forwards to `drupal-update` (same default update type) |
 | `bash drupal-update.sh -t all` | Still supported; legacy `all`, or `-t major` for coordinated major updates |
 | `-c false` / `-e token,redirect` / `-o summary.md` | Same flags on the binary |
-| `curl .../drupal-update.sh \| bash` | Still supported by the wrapper; pin DRUPAL_UPDATE_VERSION for a prerelease |
+| `curl .../drupal-update.sh \| bash` | Still supported by the wrapper; pin DRUPAL_UPDATE_VERSION to v5.0.0 |
 | Host `php`, `composer`, `jq`, `sed`, `grep` | Composer launcher; the Go CLI no longer requires jq/sed/grep |
-| `uses: valicm/drupal-update@v4` | Use the exact Go release tag, e.g. `@v5.0.0-rc.1` during preview |
+| `uses: valicm/drupal-update@v4` | Use the exact Go release tag: `@v5.0.0` |
 
 GitHub Action migration:
 
@@ -125,14 +125,14 @@ GitHub Action migration:
     php-version: '8.3' # Match your project and its required extensions.
     tools: composer:v2
 - name: Upgrade Drupal core within its current major
-  uses: valicm/drupal-update@v5.0.0-rc.1
+  uses: valicm/drupal-update@v5.0.0
   with:
     update_type: minor
     update_scope: core
     update_exclude: ''
 ```
 
-The existing inputs `update_type`, `update_core`, and `update_exclude` remain supported. New inputs are `composer_command`, `update_scope`, and `update_packages`. The Action still exports `DRUPAL_UPDATES_TABLE` and writes the step summary, so existing PR body configuration can remain. The Action builds the CLI with Go 1.25; standalone downloaded binaries do not need Go.
+The existing inputs `update_type`, `update_core`, and `update_exclude` remain supported. New inputs are `composer_command`, `update_scope`, `update_packages`, `skip_patched`, and `patch_failure`. The Action still exports `DRUPAL_UPDATES_TABLE` and writes the step summary, so existing PR body configuration can remain. The Action builds the CLI with Go 1.25; standalone downloaded binaries do not need Go.
 
 Check these behavior changes when migrating:
 
@@ -142,7 +142,7 @@ Check these behavior changes when migrating:
 - Constraint styles are preserved. Minor/major can change requirements and normalize JSON formatting; review their diff. Use `major` rather than legacy `all` when coordinating core-dev in require-dev.
 - Nuclear recovery is an explicit new mode with backups and bounded retries; do not substitute it for a routine scheduled update.
 
-The prerelease tag above is the preview channel. After a stable Go release is published, replace it with that full tag. No floating `v5` Action tag is maintained automatically.
+Examples pin the full `v5.0.0` tag. No floating `v5` Action tag is maintained automatically.
 
 ## Upgrade modes
 
@@ -181,10 +181,10 @@ drupal-update -t minor --skip-patched
 drupal-update -t minor --patch-failure skip
 ```
 
-Equivalent GitHub Action inputs (available after this change is released; use the develop branch for testing after pushing):
+Equivalent GitHub Action inputs:
 
 ```yaml
-- uses: valicm/drupal-update@develop
+- uses: valicm/drupal-update@v5.0.0
   with:
     update_type: minor
     skip_patched: 'true'
@@ -198,7 +198,7 @@ Equivalent GitHub Action inputs (available after this change is released; use th
 
 Skipping patches here means skipping upgrade targets, not disabling the patch plugin or stripping patch definitions. Nuclear mode remains the explicit option that can remove identified inline patches. The patch skip options cannot be combined with nuclear mode. Manifest/lock rollback does not restore installed files; inspect skipped results and reconcile installation with composer install before using them.
 
-The immutable v5.0.0-rc.1 tag does not contain these new options or the improved summaries. Use a subsequent release tag once published; do not move the existing RC tag.
+The v5.0.0 release includes these options and the improved summaries. Previously published RC tags remain unchanged.
 
 ## Container Composer (#12)
 
@@ -220,9 +220,9 @@ drupal-update -t major --packages token,drupal/redirect
 
 Scopes are `all` (default), `core`, and `contrib`. Package names can be full names or Drupal module names. Selecting any core package selects the core group so its required release packages stay coordinated. Exclusions and `--core false` still apply; `--scope core --core false` is rejected. Selecting an unknown locked package is an error. These filters choose update targets; necessary transitive dependency changes can still appear in a PR.
 
-### Scheduled examples using the published RC
+### Scheduled examples using v5.0.0
 
-The RC is also a GitHub Action: use `valicm/drupal-update@v5.0.0-rc.1`. Action references resolve the repository tag and its action.yml; using the Action does not require downloading a release archive. The RC tag is published and immutable. Copy the chosen example into your Drupal project's `.github/workflows/`, then configure its PHP/extensions, automation token, and project checks.
+Use the Go release as a GitHub Action with `valicm/drupal-update@v5.0.0`. Action references resolve the repository tag and its action.yml; using the Action does not require downloading a release archive. Copy the chosen example into your Drupal project's `.github/workflows/`, then configure its PHP/extensions, automation token, and project checks.
 
 | Example | Schedule (UTC) | Targets | Merge behavior |
 | --- | --- | --- | --- |
@@ -233,11 +233,11 @@ The RC is also a GitHub Action: use `valicm/drupal-update@v5.0.0-rc.1`. Action r
 
 The [Drupal core release schedule](https://www.drupal.org/about/core/policies/core-release-cycles/schedule) normally places security windows on the third Wednesday, but security releases can occur outside that window. Daily polling also covers contributed project advisories. Core bugfix windows normally surround the first Wednesday; Friday minor checks run after that window and include patches throughout the month.
 
-The [core release policy](https://www.drupal.org/about/core/policies/core-release-cycles/release-process-overview) places majors in even years, potentially in June, August, or December. The core-major example polls these months rather than assuming a fixed release date; a poll does not imply a release exists. The current schedule lists Drupal 12.0.0 and 11.5.0 for the week of December 7, 2026. `major` targets 12.0.0 when available; `minor` can select 11.5.0 while staying on Drupal 11. Neither mode selects a Drupal prerelease target simply because the updater itself uses an RC tag. Review the linked schedule when Drupal changes its release policy; manual dispatch remains available outside these windows.
+The [core release policy](https://www.drupal.org/about/core/policies/core-release-cycles/release-process-overview) places majors in even years, potentially in June, August, or December. The core-major example polls these months rather than assuming a fixed release date; a poll does not imply a release exists. The current schedule lists Drupal 12.0.0 and 11.5.0 for the week of December 7, 2026. `major` targets 12.0.0 when available; `minor` can select 11.5.0 while staying on Drupal 11. Both modes select stable Drupal targets. Review the linked schedule when Drupal changes its release policy; manual dispatch remains available outside these windows.
 
 For a monthly contributed-major cadence, copy the core-major example, remove its `window` job and the update job's `needs`/`if`, change the cron to `47 4 1 * *`, and change `update_scope` to `contrib` (or `all` for monthly major checks across core and contrib). The general/manual workflow also supports this without a schedule. All examples maintain stable PR branches so reruns update existing PRs.
 
-The earlier [split core/contrib](examples/split-updates.yml) and [per-module](examples/per-module-updates.yml) examples remain available for more granular PRs and now reference the published RC as well.
+The earlier [split core/contrib](examples/split-updates.yml) and [per-module](examples/per-module-updates.yml) examples remain available for more granular PRs and reference v5.0.0 as well.
 
 ### Automation token setup
 
@@ -281,7 +281,7 @@ Most upgrade scenarios use controlled Composer responses against the complete pr
 
 The Tests workflow runs on pushes to main/develop and pull requests. It checks formatting, race-enabled tests, vet, CLI builds, release packaging, and GitHub workflow syntax. PHP and Composer are installed so real Composer and historical fixture tests run rather than skip.
 
-The Binary release workflow runs for full version tags such as `v5.0.0` or `v5.0.0-rc.1`. It reruns Tests, cross-compiles six binaries, packages licensing notices, generates SHA256SUMS, and publishes the archives to a GitHub release. Tags with a prerelease suffix are published as prereleases; they do not replace the stable release. The first Go release is intended to use major version 5.
+The Binary release workflow runs for full version tags such as `v5.0.0` or `v5.0.1-rc.1`. It reruns Tests, cross-compiles six binaries, packages licensing notices, generates SHA256SUMS, and publishes the archives to a GitHub release. Tags with a prerelease suffix are published as prereleases; they do not replace the stable release. The first Go release is intended to use major version 5.
 
 Maintainers can build archives locally with:
 

@@ -50,7 +50,7 @@ jobs:
           tools: composer:v2
           coverage: none
       - name: Upgrade selected packages
-        uses: valicm/drupal-update@v5.0.0-rc.1
+        uses: valicm/drupal-update@v5.0.0
         with:
           update_type: major
           update_scope: core
