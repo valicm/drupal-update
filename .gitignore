@@ -1,0 +1,3 @@
+/dist/
+/.drupal-update-backup-*/
+/scripts/__pycache__/

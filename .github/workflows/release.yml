@@ -1,0 +1,50 @@
+name: Binary release
+on:
+  push:
+    tags: ['v[0-9]*.[0-9]*.[0-9]*']
+permissions:
+  contents: read
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+  build:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+      - name: Build binary archives and checksums
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: python3 scripts/build-release.py --version "$RELEASE_VERSION"
+      - name: Verify checksums
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          args=(--verify-tag --generate-notes)
+          if [[ "$RELEASE_VERSION" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$RELEASE_VERSION" dist/* "${args[@]}"

@@ -1,0 +1,113 @@
+name: Tests
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Go ${{ matrix.go }} / PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - go: '1.21.x'
+            php: '8.3'
+          - go: '1.25.x'
+            php: '8.4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+          coverage: none
+      - name: Check Bash wrapper syntax
+        run: bash -n drupal-update.sh
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l ./*.go)
+          if [ -n "$unformatted" ]; then
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Run tests with real Composer and project fixtures
+        run: go test -race -count=1 ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Build and smoke-test CLI
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/drupal-update" .
+          "$RUNNER_TEMP/drupal-update" --help
+      - name: Smoke-test release packaging
+        if: matrix.go == '1.25.x'
+        run: |
+          python3 scripts/build-release.py --version v5.0.0-ci --target linux/amd64 --output "$RUNNER_TEMP/release-smoke"
+          cd "$RUNNER_TEMP/release-smoke"
+          sha256sum --check SHA256SUMS
+          tar -xzf drupal-update_v5.0.0-ci_linux_amd64.tar.gz
+          ./drupal-update --version
+          bash ./drupal-update.sh --version
+  workflows:
+    name: Validate GitHub workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+      - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -shellcheck= -pyflakes= .github/workflows/*.yml examples/*.yml
+  action:
+    name: Composite Action smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: updater
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+      - name: Prepare offline Composer project
+        run: |
+          python3 - <<'PYCODE'
+          import json
+          from pathlib import Path
+          project = {
+              "name": "test/action-smoke",
+              "require": {"drupal/demo": "1.0.0"},
+              "repositories": [
+                  {"type": "package", "package": [
+                      {"name": "drupal/demo", "version": "1.0.0", "type": "metapackage"},
+                      {"name": "drupal/demo", "version": "1.5.0", "type": "metapackage"},
+                      {"name": "drupal/demo", "version": "2.0.0", "type": "metapackage"},
+                  ]},
+                  {"packagist.org": False},
+              ],
+          }
+          Path("composer.json").write_text(json.dumps(project))
+          PYCODE
+          composer update --no-interaction --no-progress
+      - uses: ./updater
+        with:
+          update_type: minor
+          update_scope: contrib
+          update_packages: demo
+      - name: Verify update and exported summary
+        run: |
+          python3 - <<'PYCODE'
+          import json
+          import os
+          from pathlib import Path
+          lock = json.loads(Path("composer.lock").read_text())
+          assert lock["packages"][0]["version"] == "1.5.0"
+          assert "1.5.0" in os.environ["DRUPAL_UPDATES_TABLE"]
+          assert "drupal/demo" in os.environ["DRUPAL_UPDATES_TABLE"]
+          PYCODE
