@@ -305,6 +305,34 @@ func runMode(mode, core, exclude, output string) (result error) {
 			}
 		}
 	}
+	if mode == "security" {
+		// Advisories usually name core, while core-recommended pins that
+		// package to an exact release. -W unlocks dependencies, not parents:
+		// request the installed core release group together without rewriting
+		// requirements or adding packages that the project does not use.
+		selected := map[string]bool{}
+		coreSelected := false
+		for _, name := range names {
+			selected[name] = true
+			for _, coreName := range coreReleasePackages {
+				if name == coreName {
+					coreSelected = true
+				}
+			}
+		}
+		if coreSelected {
+			for _, name := range coreReleasePackages {
+				if _, installed := locked[name]; installed && !excludedPackage(name, core, exclude) && !(skipPatched && hasPatches(name, patches)) {
+					selected[name] = true
+				}
+			}
+			names = names[:0]
+			for name := range selected {
+				names = append(names, name)
+			}
+			report.WriteString("Core security updates include the installed core release group so core-recommended can move with core. Existing requirements remain unchanged.\n\n")
+		}
+	}
 	sort.Strings(names)
 	targets := map[string]string{}
 	var args []string
