@@ -26,7 +26,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         if: github.event_name == 'workflow_dispatch' || (matrix.scope == 'core' && github.event.schedule == '17 */4 * * *') || (matrix.scope == 'contrib' && github.event.schedule == '43 2 * * *')
         with:
-          php-version: '8.3' # Match your project's platform and extension requirements.
+          php-version: '8.4' # Match your project's platform and extension requirements.
           tools: composer:v2
       - name: Update selected scope
         id: updates

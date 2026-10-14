@@ -6,7 +6,7 @@ name: Daily Drupal security updates
 on:
   workflow_dispatch:
   schedule:
-    - cron: '23 4 * * *' # Every day at 04:23 UTC; catches out-of-window releases.
+    - cron: '0 20 * * *' # Every day at 20:00 UTC; daily checks also cover out-of-window releases.
 permissions:
   contents: read
 concurrency:
@@ -30,7 +30,7 @@ jobs:
           token: ${{ secrets.DRUPAL_UPDATE_TOKEN }}
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           tools: composer:v2
           coverage: none
       - name: Upgrade selected packages

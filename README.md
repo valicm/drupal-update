@@ -122,7 +122,7 @@ GitHub Action migration:
 - uses: actions/checkout@v4
 - uses: shivammathur/setup-php@v2
   with:
-    php-version: '8.3' # Match your project and its required extensions.
+    php-version: '8.4' # Match your project and its required extensions.
     tools: composer:v2
 - name: Upgrade Drupal core within its current major
   uses: valicm/drupal-update@v5.0.0
@@ -226,12 +226,12 @@ Use the Go release as a GitHub Action with `valicm/drupal-update@v5.0.0`. Action
 
 | Example | Schedule (UTC) | Targets | Merge behavior |
 | --- | --- | --- | --- |
-| [Security updates](examples/security-updates.yml) | Daily, 04:23 | Advisory-affected Drupal core and contrib | Automerge after required checks/reviews |
+| [Security updates](examples/security-updates.yml) | Daily, 20:00 | Advisory-affected Drupal core and contrib | Automerge after required checks/reviews |
 | [Minor and patch updates](examples/minor-updates.yml) | Fridays, 04:31 | Stable releases within each direct Drupal package's current major | Review PR |
 | [Core major updates](examples/core-major-updates.yml) | Fridays, 04:47, in June/August/December of even years | Drupal core group, stable newer majors only | Review PR |
 | [General/manual updates](examples/general-updates.yml) | Manual | Choose security/minor/major/legacy all, scope, and packages | Review PR |
 
-The [Drupal core release schedule](https://www.drupal.org/about/core/policies/core-release-cycles/schedule) normally places security windows on the third Wednesday, but security releases can occur outside that window. Daily polling also covers contributed project advisories. Core bugfix windows normally surround the first Wednesday; Friday minor checks run after that window and include patches throughout the month.
+The [Drupal core release schedule](https://www.drupal.org/about/core/policies/core-release-cycles/schedule) normally places security windows on the third Wednesday, but security releases can occur outside that window. The security example checks daily at 20:00 UTC and also covers contributed project advisories. Releases published after that check are picked up on the following run. Core bugfix windows normally surround the first Wednesday; Friday minor checks run after that window and include patches throughout the month.
 
 The [core release policy](https://www.drupal.org/about/core/policies/core-release-cycles/release-process-overview) places majors in even years, potentially in June, August, or December. The core-major example polls these months rather than assuming a fixed release date; a poll does not imply a release exists. The current schedule lists Drupal 12.0.0 and 11.5.0 for the week of December 7, 2026. `major` targets 12.0.0 when available; `minor` can select 11.5.0 while staying on Drupal 11. Both modes select stable Drupal targets. Review the linked schedule when Drupal changes its release policy; manual dispatch remains available outside these windows.
 
