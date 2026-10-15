@@ -153,7 +153,7 @@ drupal-update -t major
 drupal-update -t nuclear -o recovery.md
 ```
 
-- `security`: audit locked packages, update affected Drupal packages (including transitive Drupal packages) with minimal dependency changes, then verify selected packages no longer have advisories. When a core release package is affected, include the installed core release group (core, core-recommended, scaffold, project-message, recipe-unpack, and core-dev where present) in the same update request. This allows core-recommended to move its exact core dependency; Composer's `--with-all-dependencies` alone does not unlock reverse dependencies. Existing constraints remain; if they prevent a fix, the command fails. Unrelated dependency changes may be necessary. This mode does not fix non-Drupal advisories.
+- `security`: audit locked packages, update affected Drupal packages (including transitive Drupal packages) with minimal dependency changes, then verify selected packages no longer have advisories. When a core release package is affected, include the installed core release group (core, core-recommended, scaffold, project-message, recipe-unpack, and core-dev where present) in the same update request. This allows core-recommended to move its exact core dependency; Composer's `--with-all-dependencies` alone does not unlock reverse dependencies. Existing constraints remain by default; if they prevent a fix, the command fails. Opt into `security_update_pinned` for patch-only changes to selected exact pins. Unrelated dependency changes may be necessary. This mode does not fix non-Drupal advisories.
 - `minor`: select the latest stable release within each direct Drupal package's current major. Patch releases are included. Constraints can change, so pinned requirements do not prevent selection.
 - `major`: select the latest stable release in a newer major for direct Drupal packages. Existing core release packages are coordinated across require and require-dev. Packages without a newer major stay unchanged, subject to Composer's dependency resolution.
 - `nuclear`: back up composer.json, composer.lock and patches.lock.json, remove composer.lock, then run composer install up to eight times. A dependency solving failure can relax direct Drupal requirements to `*`. A patch failure can remove an inline patch only when Composer output identifies exactly one configured patch URL. Dependency and patch locks are regenerated after patch changes. External patch definitions and unidentified failures stop recovery. Core=false, exclusions, scope restrictions and package selection are rejected because a fresh resolution affects the whole graph.
@@ -170,7 +170,28 @@ Composer command behavior follows the [official CLI documentation](https://getco
 
 ## Constraint preservation (#13)
 
-Upgrades keep simple constraint styles: `^1.0` becomes `^2.0.0`, `~1.0` becomes `~2.0.0`, `1.*` becomes `2.*`, and exact `1.0.0` becomes exact `2.0.0`. Stability suffixes such as `@beta` are retained. Minor and major modes use temporary exact Composer update targets to install the chosen release while leaving the broader constraint in composer.json. Minor and major modes retain compound alternatives such as `^2 || ^3`; Composer rejects a temporary target outside those alternatives and the manifests and locks are restored. Other complex constraints and aliases are not automatically rewritten. The legacy `all` mode rejects unsupported complex constraints. Security and semver-safe updates do not rewrite requirements; nuclear may deliberately relax them to `*`.
+Upgrades keep simple constraint styles: `^1.0` becomes `^2.0.0`, `~1.0` becomes `~2.0.0`, `1.*` becomes `2.*`, and exact `1.0.0` becomes exact `2.0.0`. Stability suffixes such as `@beta` are retained. Minor and major modes use temporary exact Composer update targets to install the chosen release while leaving the broader constraint in composer.json. Minor and major modes retain compound alternatives such as `^2 || ^3`; Composer rejects a temporary target outside those alternatives and the manifests and locks are restored. Other complex constraints and aliases are not automatically rewritten. The legacy `all` mode rejects unsupported complex constraints. Security updates preserve requirements unless `security_update_pinned` is enabled; semver-safe updates do not rewrite them. Nuclear may deliberately relax them to `*`.
+
+## Security fixes for exact version pins
+
+Security mode preserves composer.json requirements by default. If core is pinned to an affected release such as `11.4.7`, opting into `--security-update-pinned` permits the updater to advance that exact pin to the latest stable patch within the same minor line, for example `11.4.10`. It will not select `11.5.0` or `12.0.0` for that pin.
+
+```sh
+drupal-update -t security --security-update-pinned -o security-updates.md
+```
+
+GitHub Action input (requires a release containing this option; until then use `@main` after pushing the change):
+
+```yaml
+- uses: valicm/drupal-update@main
+  with:
+    update_type: security
+    security_update_pinned: 'true'
+```
+
+This opt-in applies only to selected direct numeric exact pins. Installed core release pins are coordinated, including core-dev in require-dev. Existing ranges and unrelated requirements remain unchanged, and affected transitive packages are still resolved under their parents' constraints. The summary lists each pin change. Composer still enforces dependency/platform compatibility and security blocking; the post-update audit must clear the selected advisories or the manifests and locks are restored.
+
+Selection considers stable patch releases at or above the current version within its existing major/minor line; an incompatible latest patch or a fix available only on a newer minor still fails for review. This is not a general constraint relaxation or permission to make minor/major jumps. The default remains `security_update_pinned: 'false'`, with a hint when exact pins block a security run. Older published tags do not include the new option.
 
 ## Composer failure summaries and patch handling
 
@@ -267,7 +288,7 @@ For the daily security example:
 
 The workflow validates Composer files/platform, creates the security PR, and enables `gh pr merge --auto --squash` for the exact PR head. [GitHub automerge](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/automatically-merging-a-pull-request) waits for required checks/reviews. Without required checks, a mergeable PR can merge immediately; the example does not invent site-level checks or bypass branch protection. Minor, major, and manual examples never enable automerge.
 
-Security mode covers Drupal advisories reported by Composer under the existing constraints. It does not fix unrelated non-Drupal packages or force a major jump when current constraints block the fix. A blocked update fails and requires a reviewed constraint change. Necessary dependency moves can still accompany a security fix.
+Security mode covers Drupal advisories reported by Composer under the existing constraints, with optional patch-only advancement of exact pins via `security_update_pinned`. It does not fix unrelated non-Drupal packages or force a minor/major jump when a pin blocks the fix. A blocked update still fails and requires a reviewed constraint change. Necessary dependency moves can still accompany a security fix.
 
 The new examples commit project changes, including scaffolded files, while excluding `.drupal-update-backup-*`; normal Git ignore rules still apply. Adjust their `add-paths` for your repository's layout. Schedules run from the default branch, so merge the copied workflows into that branch to activate them. GitHub's scheduled runs can be delayed; the times above are polling times, not guaranteed deployment times.
 

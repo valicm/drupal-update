@@ -49,6 +49,7 @@ func newApp() *cli.App {
 		Version: buildVersion,
 		Usage:   "A tool to perform composer updates of Drupal projects",
 		Flags: []cli.Flag{
+			&cli.BoolFlag{Name: "security-update-pinned", EnvVars: []string{"INPUT_SECURITY_UPDATE_PINNED"}, Usage: "Allow security fixes to advance exact pins within the current minor version"},
 			&cli.BoolFlag{Name: "skip-patched", EnvVars: []string{"INPUT_SKIP_PATCHED"}, Usage: "Skip update targets with configured inline or external patches"},
 			&cli.StringFlag{Name: "patch-failure", Value: "fail", EnvVars: []string{"INPUT_PATCH_FAILURE"}, Usage: "Patch failure policy: fail or skip (minor/major only)"},
 			&cli.StringFlag{Name: "composer-command", Value: "composer", EnvVars: []string{"INPUT_COMPOSER_COMMAND"}, Usage: "Composer launcher, e.g. ddev composer (no shell expansion)"},
@@ -120,6 +121,12 @@ func newApp() *cli.App {
 			if updateType == "nuclear" && c.Bool("skip-patched") {
 				return fmt.Errorf("nuclear cannot skip patched packages")
 			}
+			if c.Bool("security-update-pinned") && updateType != "security" {
+				return fmt.Errorf("security-update-pinned requires type=security")
+			}
+			previousPinned := securityUpdatePinned
+			securityUpdatePinned = c.Bool("security-update-pinned")
+			defer func() { securityUpdatePinned = previousPinned }()
 			previousSkip, previousPolicy := skipPatched, patchFailurePolicy
 			skipPatched, patchFailurePolicy = c.Bool("skip-patched"), policy
 			defer func() { skipPatched, patchFailurePolicy = previousSkip, previousPolicy }()

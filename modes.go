@@ -150,6 +150,9 @@ func targetVersion(current string, versions []string, mode string) (string, erro
 		if !ok {
 			continue
 		}
+		if mode == "patch" && (n[0] != old[0] || n[1] != old[1]) {
+			continue
+		}
 		if mode == "minor" && n[0] != old[0] {
 			continue
 		}
@@ -330,7 +333,7 @@ func runMode(mode, core, exclude, output string) (result error) {
 			for name := range selected {
 				names = append(names, name)
 			}
-			report.WriteString("Core security updates include the installed core release group so core-recommended can move with core. Existing requirements remain unchanged.\n\n")
+			report.WriteString("Core security updates include the installed core release group so core-recommended can move with core.\n\n")
 		}
 	}
 	sort.Strings(names)
@@ -378,8 +381,17 @@ func runMode(mode, core, exclude, output string) (result error) {
 			}
 		}
 	}
-	for n := range targets {
-		args = append(args, n)
+	if mode == "security" {
+		if securityUpdatePinned {
+			targets, e = securityPinnedTargets(names, roots, locked)
+			if e != nil {
+				return e
+			}
+		}
+	} else {
+		for n := range targets {
+			args = append(args, n)
+		}
 	}
 	sort.Strings(args)
 	if len(args) == 0 {
@@ -403,6 +415,9 @@ func runMode(mode, core, exclude, output string) (result error) {
 		}
 	}()
 	for _, n := range args {
+		if mode == "security" && targets[n] != "" {
+			fmt.Fprintf(&report, "- Advancing exact pin %s: %s → %s (same minor version)\n", packageLink(n), cell(roots[n]), cell(targets[n]))
+		}
 		if targets[n] != "" {
 			fmt.Fprintf(&report, "- Selected %s: %s → %s\n", packageLink(n), cell(locked[n]), releaseLink(n, targets[n]))
 		} else {
@@ -419,7 +434,16 @@ func runMode(mode, core, exclude, output string) (result error) {
 			failed = failedPatchTarget(log, patches, args)
 		}
 		if failed == "" {
-			return fmt.Errorf("update failed: %w\n%s", updateErr, log)
+			hint := ""
+			if mode == "security" && !securityUpdatePinned {
+				for _, n := range args {
+					if exactRequirement(roots[n]) {
+						hint = "\nSelected exact version pins remain unchanged. Use --security-update-pinned (Action: security_update_pinned: true) to permit patch-only pin changes within the current minor version."
+						break
+					}
+				}
+			}
+			return fmt.Errorf("update failed: %w\n%s%s", updateErr, log, hint)
 		}
 		if e := backup.restore(); e != nil {
 			return e

@@ -20,6 +20,9 @@ inputs:
   update_packages:
     description: Comma-separated packages or module names to update
     default: ''
+  security_update_pinned:
+    description: Allow security fixes to advance exact pins within the current minor version
+    default: 'false'
   skip_patched:
     description: Skip update targets with configured patches
     default: 'false'
@@ -46,6 +49,7 @@ runs:
         INPUT_COMPOSER_COMMAND: ${{ inputs.composer_command }}
         INPUT_UPDATE_SCOPE: ${{ inputs.update_scope }}
         INPUT_UPDATE_PACKAGES: ${{ inputs.update_packages }}
+        INPUT_SECURITY_UPDATE_PINNED: ${{ inputs.security_update_pinned }}
         INPUT_SKIP_PATCHED: ${{ inputs.skip_patched }}
         INPUT_PATCH_FAILURE: ${{ inputs.patch_failure }}
       run: '"$RUNNER_TEMP/drupal-update"'
