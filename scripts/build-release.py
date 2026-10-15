@@ -14,7 +14,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = [(system, arch) for system in ("linux", "darwin", "windows")
            for arch in ("amd64", "arm64")]
-DOCUMENTS = ("LICENSE", "THIRD_PARTY_NOTICES.md", "README.md",
+DOCUMENTS = ("LICENSE", "THIRD_PARTY_NOTICES.md", "README.md", "USAGE.md",
              "docs/images/fine-grained-token-permissions.png")
 
 
@@ -56,6 +56,8 @@ def main():
                 "DEFAULT_RELEASE=latest", f"DEFAULT_RELEASE={args.version}"), encoding="utf-8")
             wrapper.chmod(0o755)
             files = [(binary, binary_name), (wrapper, "drupal-update.sh")] + [(ROOT / name, name) for name in DOCUMENTS]
+            files += [(path, path.relative_to(ROOT).as_posix())
+                      for path in sorted((ROOT / "examples").glob("*.yml"))]
             if system == "windows":
                 with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as handle:
                     for source, name in files:

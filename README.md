@@ -9,9 +9,13 @@ and third-party notices.
 Go CLI port of [valicm/drupal-update](https://github.com/valicm/drupal-update).
 Requires composer.json and composer.lock in the working directory, plus a working Composer launcher. The default uses host Composer; a container launcher can provide PHP and Composer.
 
+For practical scenarios and a CLI/Action option reference, see [USAGE.md](USAGE.md).
+
+Examples target the upcoming **v5.0.2** release; publish its tag before using the pinned references.
+
 ## Standalone use outside GitHub Actions
 
-Download a binary from [GitHub Releases](https://github.com/valicm/drupal-update/releases). Release archives contain the executable, this guide, the MIT license, and third-party notices. Go is not required to run a downloaded binary; PHP and Composer 2.7+ must be available locally or through your configured launcher.
+Download a binary from [GitHub Releases](https://github.com/valicm/drupal-update/releases). Release archives contain the executable, the README and USAGE guides, example workflows, the MIT license, and third-party notices. Go is not required to run a downloaded binary; PHP and Composer 2.7+ must be available locally or through your configured launcher.
 
 Available binaries:
 
@@ -24,7 +28,7 @@ Available binaries:
 Linux/macOS installation (select a published Go release; v4 has no Go binaries):
 
 ```sh
-version=v5.0.0
+version=v5.0.2
 case "$(uname -s)" in
   Linux) os=linux ;;
   Darwin) os=darwin ;;
@@ -93,15 +97,15 @@ bash drupal-update.sh -t all -c false -e token,redirect -o summary.md
 
 The wrapper tries, in order: `DRUPAL_UPDATE_BINARY`, a binary beside the script, `drupal-update` on PATH, a local source build when Go is installed, then a verified GitHub release download. A source build runs in the script's checkout; upgrades still run in the caller's Drupal project. A downloaded binary is temporary and removed after the command finishes.
 
-The repository wrapper defaults to the latest **stable** full release. To pin v5.0.0 explicitly:
+The repository wrapper defaults to the latest **stable** full release. To pin v5.0.2 explicitly:
 
 ```sh
-DRUPAL_UPDATE_VERSION=v5.0.0 bash drupal-update.sh -t minor
-curl -fsSL https://raw.githubusercontent.com/valicm/drupal-update/v5.0.0/drupal-update.sh | \
-  DRUPAL_UPDATE_VERSION=v5.0.0 bash -s -- -t minor -o summary.md
+DRUPAL_UPDATE_VERSION=v5.0.2 bash drupal-update.sh -t minor
+curl -fsSL https://raw.githubusercontent.com/valicm/drupal-update/v5.0.2/drupal-update.sh | \
+  DRUPAL_UPDATE_VERSION=v5.0.2 bash -s -- -t minor -o summary.md
 ```
 
-A release archive includes a wrapper pinned to its exact release and the adjacent binary. Installed/adjacent binaries take precedence over download version selection; use `DRUPAL_UPDATE_BINARY=/path/to/drupal-update` to choose one explicitly. Downloading needs curl, awk, tar (or unzip on Windows Bash), and sha256sum or shasum. Older v1–v4 tags remain unchanged. The v5.0.0 release includes the compatibility wrapper and the new CLI options.
+A release archive includes a wrapper pinned to its exact release and the adjacent binary. Installed/adjacent binaries take precedence over download version selection; use `DRUPAL_UPDATE_BINARY=/path/to/drupal-update` to choose one explicitly. Downloading needs curl, awk, tar (or unzip on Windows Bash), and sha256sum or shasum. Older v1–v4 tags remain unchanged. The v5.0.2 release includes the compatibility wrapper and the new CLI options.
 
 ## Migration from v4 (Bash) to v5 (Go)
 
@@ -112,9 +116,9 @@ v4 is the last Bash-based release. The Go migration is a new major release: the 
 | `bash drupal-update.sh` | Still supported; forwards to `drupal-update` (same default update type) |
 | `bash drupal-update.sh -t all` | Still supported; legacy `all`, or `-t major` for coordinated major updates |
 | `-c false` / `-e token,redirect` / `-o summary.md` | Same flags on the binary |
-| `curl .../drupal-update.sh \| bash` | Still supported by the wrapper; pin DRUPAL_UPDATE_VERSION to v5.0.0 |
+| `curl .../drupal-update.sh \| bash` | Still supported by the wrapper; pin DRUPAL_UPDATE_VERSION to v5.0.2 |
 | Host `php`, `composer`, `jq`, `sed`, `grep` | Composer launcher; the Go CLI no longer requires jq/sed/grep |
-| `uses: valicm/drupal-update@v4` | Use the exact Go release tag: `@v5.0.0` |
+| `uses: valicm/drupal-update@v4` | Use the exact Go release tag: `@v5.0.2` |
 
 GitHub Action migration:
 
@@ -125,7 +129,7 @@ GitHub Action migration:
     php-version: '8.4' # Match your project and its required extensions.
     tools: composer:v2
 - name: Upgrade Drupal core within its current major
-  uses: valicm/drupal-update@v5.0.0
+  uses: valicm/drupal-update@v5.0.2
   with:
     update_type: minor
     update_scope: core
@@ -142,7 +146,7 @@ Check these behavior changes when migrating:
 - Constraint styles are preserved. Minor/major can change requirements and normalize JSON formatting; review their diff. Use `major` rather than legacy `all` when coordinating core-dev in require-dev.
 - Nuclear recovery is an explicit new mode with backups and bounded retries; do not substitute it for a routine scheduled update.
 
-Examples pin the full `v5.0.0` tag. No floating `v5` Action tag is maintained automatically.
+Examples pin the full `v5.0.2` tag. No floating `v5` Action tag is maintained automatically.
 
 ## Upgrade modes
 
@@ -180,10 +184,10 @@ Security mode preserves composer.json requirements by default. If core is pinned
 drupal-update -t security --security-update-pinned -o security-updates.md
 ```
 
-GitHub Action input (requires a release containing this option; until then use `@main` after pushing the change):
+GitHub Action input (included in v5.0.2):
 
 ```yaml
-- uses: valicm/drupal-update@main
+- uses: valicm/drupal-update@v5.0.2
   with:
     update_type: security
     security_update_pinned: 'true'
@@ -191,7 +195,7 @@ GitHub Action input (requires a release containing this option; until then use `
 
 This opt-in applies only to selected direct numeric exact pins. Installed core release pins are coordinated, including core-dev in require-dev. Existing ranges and unrelated requirements remain unchanged, and affected transitive packages are still resolved under their parents' constraints. The summary lists each pin change. Composer still enforces dependency/platform compatibility and security blocking; the post-update audit must clear the selected advisories or the manifests and locks are restored.
 
-Selection considers stable patch releases at or above the current version within its existing major/minor line; an incompatible latest patch or a fix available only on a newer minor still fails for review. This is not a general constraint relaxation or permission to make minor/major jumps. The default remains `security_update_pinned: 'false'`, with a hint when exact pins block a security run. Older published tags do not include the new option.
+Selection considers stable patch releases at or above the current version within its existing major/minor line; an incompatible latest patch or a fix available only on a newer minor still fails for review. This is not a general constraint relaxation or permission to make minor/major jumps. The default remains `security_update_pinned: 'false'`, with a hint when exact pins block a security run. Earlier releases do not include the new option.
 
 ## Composer failure summaries and patch handling
 
@@ -205,7 +209,7 @@ drupal-update -t minor --patch-failure skip
 Equivalent GitHub Action inputs:
 
 ```yaml
-- uses: valicm/drupal-update@v5.0.0
+- uses: valicm/drupal-update@v5.0.2
   with:
     update_type: minor
     skip_patched: 'true'
@@ -219,7 +223,7 @@ Equivalent GitHub Action inputs:
 
 Skipping patches here means skipping upgrade targets, not disabling the patch plugin or stripping patch definitions. Nuclear mode remains the explicit option that can remove identified inline patches. The patch skip options cannot be combined with nuclear mode. Manifest/lock rollback does not restore installed files; inspect skipped results and reconcile installation with composer install before using them.
 
-The v5.0.0 release includes these options and the improved summaries. Previously published RC tags remain unchanged.
+The v5.0.2 release includes these options and the improved summaries. Previously published RC tags remain unchanged.
 
 ## Container Composer (#12)
 
@@ -241,9 +245,9 @@ drupal-update -t major --packages token,drupal/redirect
 
 Scopes are `all` (default), `core`, and `contrib`. Package names can be full names or Drupal module names. Selecting any core package selects the core group so its required release packages stay coordinated. Exclusions and `--core false` still apply; `--scope core --core false` is rejected. Selecting an unknown locked package is an error. These filters choose update targets; necessary transitive dependency changes can still appear in a PR.
 
-### Scheduled examples using v5.0.0
+### Scheduled examples using v5.0.2
 
-Use the Go release as a GitHub Action with `valicm/drupal-update@v5.0.0`. Action references resolve the repository tag and its action.yml; using the Action does not require downloading a release archive. Copy the chosen example into your Drupal project's `.github/workflows/`, then configure its PHP/extensions, automation token, and project checks.
+Use the Go release as a GitHub Action with `valicm/drupal-update@v5.0.2`. Action references resolve the repository tag and its action.yml; using the Action does not require downloading a release archive. Copy the chosen example into your Drupal project's `.github/workflows/`, then configure its PHP/extensions, automation token, and project checks.
 
 | Example | Schedule (UTC) | Targets | Merge behavior |
 | --- | --- | --- | --- |
@@ -258,7 +262,7 @@ The [core release policy](https://www.drupal.org/about/core/policies/core-releas
 
 For a monthly contributed-major cadence, copy the core-major example, remove its `window` job and the update job's `needs`/`if`, change the cron to `47 4 1 * *`, and change `update_scope` to `contrib` (or `all` for monthly major checks across core and contrib). The general/manual workflow also supports this without a schedule. All examples maintain stable PR branches so reruns update existing PRs.
 
-The earlier [split core/contrib](examples/split-updates.yml) and [per-module](examples/per-module-updates.yml) examples remain available for more granular PRs and reference v5.0.0 as well.
+The earlier [split core/contrib](examples/split-updates.yml) and [per-module](examples/per-module-updates.yml) examples remain available for more granular PRs and reference v5.0.2 as well.
 
 ### Automation token setup
 
@@ -302,19 +306,19 @@ Most upgrade scenarios use controlled Composer responses against the complete pr
 
 The Tests workflow runs on pushes to main/develop and pull requests. It checks formatting, race-enabled tests, vet, CLI builds, release packaging, and GitHub workflow syntax. PHP and Composer are installed so real Composer and historical fixture tests run rather than skip.
 
-The Binary release workflow runs for full version tags such as `v5.0.0` or `v5.0.1-rc.1`. It reruns Tests, cross-compiles six binaries, packages licensing notices, generates SHA256SUMS, and publishes the archives to a GitHub release. Tags with a prerelease suffix are published as prereleases; they do not replace the stable release. The first Go release is intended to use major version 5.
+The Binary release workflow runs for full version tags such as `v5.0.2` or `v5.0.3-rc.1`. It reruns Tests, cross-compiles six binaries, packages licensing notices, generates SHA256SUMS, and publishes the archives to a GitHub release. Tags with a prerelease suffix are published as prereleases; they do not replace the stable release. The first Go release is intended to use major version 5.
 
 Maintainers can build archives locally with:
 
 ```sh
-python3 scripts/build-release.py --version v5.0.0 --output /tmp/drupal-update-v5
+python3 scripts/build-release.py --version v5.0.2 --output /tmp/drupal-update-v5
 ```
 
 Use a fresh output directory. To release after tests and review, tag the intended commit and push the tag:
 
 ```sh
-git tag -a v5.0.0 -m "Drupal Update v5.0.0"
-git push origin v5.0.0
+git tag -a v5.0.2 -m "Drupal Update v5.0.2"
+git push origin v5.0.2
 ```
 
 Publishing a tag starts the release workflow; do not retag an already published version. No fixture project files are included in binary archives.
