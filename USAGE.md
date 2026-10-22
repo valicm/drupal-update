@@ -1,6 +1,6 @@
 # Drupal Update usage scenarios
 
-Examples target **v5.0.2**, including the opt-in pinned-security setting. Publish that tag before using these references. See [installation and migration](README.md) for binary downloads, the Bash wrapper, and migration from v4.
+Examples target **v5.0.3**, including the opt-in pinned-security setting. Publish that tag before using these references. See [installation and migration](README.md) for binary downloads, the Bash wrapper, and migration from v4.
 
 Run standalone commands from the Drupal project directory containing composer.json and composer.lock. Use PHP/extensions that satisfy the project and Composer 2.7+. DDEV or another Composer launcher can provide the runtime instead of host PHP. Review upgrade diffs before deployment.
 
@@ -39,7 +39,7 @@ bash /path/to/drupal-update.sh -t all -c false -e token,redirect -o summary.md
 The wrapper forwards the original flags and keeps the caller's project directory. It uses an explicit/adjacent/PATH binary, builds a local source checkout if Go is available, or downloads and verifies a release binary.
 
 ```sh
-DRUPAL_UPDATE_VERSION=v5.0.2 bash drupal-update.sh -t security
+DRUPAL_UPDATE_VERSION=v5.0.3 bash drupal-update.sh -t security
 DRUPAL_UPDATE_BINARY=/opt/tools/drupal-update bash drupal-update.sh -t minor
 ```
 
@@ -79,7 +79,7 @@ The summary reports pin changes, and the post-update audit must clear the select
 GitHub Action equivalent:
 
 ```yaml
-- uses: valicm/drupal-update@v5.0.2
+- uses: valicm/drupal-update@v5.0.3
   with:
     update_type: security
     security_update_pinned: 'true'
@@ -116,7 +116,7 @@ drupal-update -t minor --skip-patched
 Targets with configured inline or external patches are skipped. A patch on core skips the core group. Patch definitions remain unchanged. These are target filters, not a dependency freeze: a necessary transitive change can still affect a patched package and fail.
 
 ```yaml
-- uses: valicm/drupal-update@v5.0.2
+- uses: valicm/drupal-update@v5.0.3
   with:
     update_type: minor
     skip_patched: 'true'
@@ -133,7 +133,7 @@ drupal-update -t minor --patch-failure skip -o updates.md
 For minor/major mode, a uniquely identified selected package with a patch failure can be removed from the retry set after restoring the original manifests and locks. A failed core patch skips the core group. Remaining targets are retried with a shrinking target list. Patch definitions are retained.
 
 ```yaml
-- uses: valicm/drupal-update@v5.0.2
+- uses: valicm/drupal-update@v5.0.3
   with:
     update_type: minor
     patch_failure: skip
@@ -172,7 +172,7 @@ steps:
       php-version: '8.4' # Match the project and required extensions.
       tools: composer:v2
   - name: Apply Drupal security fixes
-    uses: valicm/drupal-update@v5.0.2
+    uses: valicm/drupal-update@v5.0.3
     with:
       update_type: security
       security_update_pinned: 'true'
@@ -180,7 +180,7 @@ steps:
 
 The Action builds the CLI, writes the step summary, and exports `DRUPAL_UPDATES_TABLE`. PHP/Composer must already be available, or set `composer_command` to a working container launcher. For PR creation, use one of the complete workflows below and follow the [automation-token setup](README.md#automation-token-setup).
 
-Pin an exact Action tag such as `@v5.0.2` for predictable behavior. `@latest` is a Git reference, not an automatic alias for GitHub's newest release; this repository does not maintain it. The Bash wrapper's `latest` download setting is separate.
+Pin an exact Action tag such as `@v5.0.3` for predictable behavior. `@latest` is a Git reference, not an automatic alias for GitHub's newest release; this repository does not maintain it. The Bash wrapper's `latest` download setting is separate.
 
 ## 13. Choose a scheduled PR workflow
 
@@ -210,7 +210,7 @@ Archive the Markdown report even when the command fails. The CLI returns a nonze
 
 ## 15. Install from configuration, upgrade, and export configuration
 
-These options require the next release after v5.0.2. For testing the source version, use `valicm/drupal-update@main` rather than a published v5.0.2 binary or Action.
+These options require the next release after v5.0.3. For testing the source version, use `valicm/drupal-update@main` rather than a published v5.0.3 binary or Action.
 
 Prepare a **disposable database**, database credentials in the site's settings, and `$settings['config_sync_directory']` pointing to the committed configuration. Install the current locked dependencies (including Drush) first:
 
