@@ -49,6 +49,10 @@ func newApp() *cli.App {
 		Version: buildVersion,
 		Usage:   "A tool to perform composer updates of Drupal projects",
 		Flags: []cli.Flag{
+			&cli.BoolFlag{Name: "install-existing-config", EnvVars: []string{"INPUT_INSTALL_EXISTING_CONFIG"}, Usage: "Install current locked Drupal from config BEFORE upgrading (disposable database only)"},
+			&cli.BoolFlag{Name: "updatedb", EnvVars: []string{"INPUT_UPDATEDB"}, Usage: "Run Drush updatedb after successful Composer upgrades"},
+			&cli.BoolFlag{Name: "export-config", EnvVars: []string{"INPUT_EXPORT_CONFIG"}, Usage: "Run Drush config:export after successful Composer upgrades and database updates"},
+			&cli.StringFlag{Name: "drush-command", Value: "vendor/bin/drush", EnvVars: []string{"INPUT_DRUSH_COMMAND"}, Usage: "Drush launcher, e.g. ddev drush (no shell expansion)"},
 			&cli.BoolFlag{Name: "security-update-pinned", EnvVars: []string{"INPUT_SECURITY_UPDATE_PINNED"}, Usage: "Allow security fixes to advance exact pins within the current minor version"},
 			&cli.BoolFlag{Name: "skip-patched", EnvVars: []string{"INPUT_SKIP_PATCHED"}, Usage: "Skip update targets with configured inline or external patches"},
 			&cli.StringFlag{Name: "patch-failure", Value: "fail", EnvVars: []string{"INPUT_PATCH_FAILURE"}, Usage: "Patch failure policy: fail or skip (minor/major only)"},
@@ -138,12 +142,13 @@ func newApp() *cli.App {
 				return err
 			}
 
-			// Perform update
-			if err := updateProjects(updateType, core, exclude, output); err != nil {
-				return err
+			drupal := drupalLifecycle{
+				install: c.Bool("install-existing-config"), updateDB: c.Bool("updatedb"),
+				export: c.Bool("export-config"), command: c.String("drush-command"),
 			}
-
-			return nil
+			return drupal.run(output, func() error {
+				return updateProjects(updateType, core, exclude, output)
+			})
 		},
 	}
 }
@@ -350,26 +355,7 @@ func updateProjects(updateType, core, exclude, output string) error {
 		}
 		fmt.Fprintf(&summary, "| %s | %s | %s | %s | %s |\n", packageLink(pkg.Name), cell(pkg.Version), releaseLink(pkg.Name, pkg.Latest), status, cell(abandoned))
 	}
-	report := summary.String()
-	fmt.Print(report)
-	if output != "" {
-		if err := os.WriteFile(output, []byte(report), 0644); err != nil {
-			return err
-		}
-	}
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
-		if err := appendReport(os.Getenv("GITHUB_STEP_SUMMARY"), report); err != nil {
-			return err
-		}
-		// Unique delimiter avoids interpreting report content as environment commands.
-		delimiter := "DRUPAL_UPDATE_REPORT_END"
-		for strings.Contains(report, delimiter) {
-			delimiter += "_"
-		}
-		if err := appendReport(os.Getenv("GITHUB_ENV"), "DRUPAL_UPDATES_TABLE<<"+delimiter+"\n"+report+delimiter+"\n"); err != nil {
-			return err
-		}
-	}
+	failures = append(failures, publishReport(summary.String(), output))
 	return errors.Join(failures...)
 }
 

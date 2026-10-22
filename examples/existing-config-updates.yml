@@ -1,0 +1,111 @@
+# Copy into .github/workflows/ in your Drupal project.
+# Set DRUPAL_UPDATE_TOKEN to a PAT with Contents and Pull requests write.
+# For a GitHub App, generate a token in the job and use that step output instead.
+# Requires committed config/sync, a web/ docroot, and Drush in composer.lock.
+# Adjust DRUPAL_WEB_ROOT and DRUPAL_CONFIG_SYNC for your project.
+# Uses a fresh CI database; no production database credentials are needed.
+# Lifecycle inputs are unreleased: pin the next release once available.
+name: Drupal updates with existing configuration
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: drupal-dependency-updates
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      DRUPAL_WEB_ROOT: web
+      DRUPAL_CONFIG_SYNC: config/sync
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-password
+          MYSQL_DATABASE: drupal_ci
+          MYSQL_USER: drupal_ci
+          MYSQL_PASSWORD: ci-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Require the automation token
+        env:
+          UPDATE_TOKEN: ${{ secrets.DRUPAL_UPDATE_TOKEN }}
+        run: |
+          if [ -z "$UPDATE_TOKEN" ]; then
+            echo "Set DRUPAL_UPDATE_TOKEN so update PRs can trigger required checks."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ secrets.DRUPAL_UPDATE_TOKEN }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, gd, intl, mbstring, xml, zip
+          tools: composer:v2
+          coverage: none
+      - name: Install current locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare disposable site settings
+        # Replace settings only in this checkout; exclude them from the PR below.
+        run: |
+          test -f "$DRUPAL_CONFIG_SYNC/core.extension.yml"
+          test -x vendor/bin/drush
+          cp "$DRUPAL_WEB_ROOT/sites/default/default.settings.php" "$DRUPAL_WEB_ROOT/sites/default/settings.php"
+          cat >> "$DRUPAL_WEB_ROOT/sites/default/settings.php" <<'PHP'
+          $databases['default']['default'] = [
+            'database' => 'drupal_ci',
+            'username' => 'drupal_ci',
+            'password' => 'ci-password',
+            'host' => '127.0.0.1',
+            'port' => '3306',
+            'driver' => 'mysql',
+            'namespace' => 'Drupal\mysql\Driver\Database\mysql',
+            'autoload' => 'core/modules/mysql/src/Driver/Database/mysql/',
+            'prefix' => '',
+          ];
+          $settings['hash_salt'] = 'disposable-ci-site';
+          $settings['config_sync_directory'] = getenv('GITHUB_WORKSPACE') . '/' . getenv('DRUPAL_CONFIG_SYNC');
+          $settings['trusted_host_patterns'] = ['^localhost$'];
+          PHP
+      - name: Install from config, upgrade, update database and export config
+        uses: valicm/drupal-update@main # Replace with the next release tag when published.
+        with:
+          update_type: minor
+          update_scope: all
+          install_existing_config: 'true'
+          updatedb: 'true'
+          export_config: 'true'
+          drush_command: 'vendor/bin/drush --uri=http://localhost'
+      - name: Validate Composer files and platform
+        run: |
+          composer validate --no-check-publish
+          composer check-platform-reqs --lock
+      # Run project-specific tests here and require site validation on update PRs.
+      - name: Create or update the upgrade PR
+        id: pr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.DRUPAL_UPDATE_TOKEN }}
+          base: ${{ github.event.repository.default_branch }}
+          branch: updates/drupal-config
+          title: Drupal updates and migrated configuration
+          commit-message: Drupal updates and migrated configuration
+          body: ${{ env.DRUPAL_UPDATES_TABLE }}
+          # Keep exported YAML and scaffold changes; exclude CI settings and backups.
+          # Normal repository ignore rules still apply to vendor and installed packages.
+          add-paths: |
+            .
+            :(exclude).drupal-update-backup-*/**
+            :(exclude)${{ env.DRUPAL_WEB_ROOT }}/sites/default/settings*.php
+            :(exclude)${{ env.DRUPAL_WEB_ROOT }}/sites/default/files/**
+          delete-branch: true

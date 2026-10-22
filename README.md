@@ -322,3 +322,9 @@ git push origin v5.0.2
 ```
 
 Publishing a tag starts the release workflow; do not retag an already published version. No fixture project files are included in binary archives.
+
+### Drupal database updates and configuration export (unreleased)
+
+The next release adds opt-in `--install-existing-config`, `--updatedb`, and `--export-config` options, with matching Action inputs. Install from committed configuration on a disposable database before upgrading, then apply database updates and export configuration after Composer succeeds. For an existing database, omit installation. See [the full workflow and prerequisites](USAGE.md#15-install-from-configuration-upgrade-and-export-configuration).
+
+See [the install-from-config workflow example](examples/existing-config-updates.yml) for a disposable MySQL service, PHP 8.4, temporary site settings, and an upgrade PR including exported configuration. This example uses `@main` until the lifecycle options are released.

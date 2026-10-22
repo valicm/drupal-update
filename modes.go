@@ -275,7 +275,7 @@ func runMode(mode, core, exclude, output string) (result error) {
 		if result != nil {
 			report.WriteString(failureMarkdown(result.Error()))
 		}
-		result = errors.Join(result, modeReport(report.String(), output))
+		result = errors.Join(result, publishReport(report.String(), output))
 	}()
 	if mode == "nuclear" {
 		return nuclear(m, &report)

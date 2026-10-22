@@ -16,7 +16,7 @@ Run standalone commands from the Drupal project directory containing composer.js
 | Legacy general upgrades | `drupal-update -t all` | Retain the original all-update behavior; prefer major mode for coordinated core-dev changes |
 | Dependency recovery | `drupal-update -t nuclear -o recovery.md` | Fresh resolution with bounded retries and explicit reports of relaxed constraints/removed patches |
 
-Scope and package filters choose requested update targets. Composer may move their dependencies too. This tool updates project files and dependencies; it does not run Drupal database updates, export configuration, or deploy the site.
+Scope and package filters choose requested update targets. Composer may move their dependencies too. By default this tool updates project files and dependencies. Database updates and configuration export are opt-in (see scenario 15); it does not deploy the site.
 
 ## 1. Run locally with a downloaded binary
 
@@ -208,6 +208,54 @@ drupal-update -t security --security-update-pinned -o security-updates.md
 
 Archive the Markdown report even when the command fails. The CLI returns a nonzero exit status on failures and prints readable diagnostics. Do not set GitHub's summary/environment variables for another CI platform; standalone use has no GitHub API dependency once the binary is installed.
 
+## 15. Install from configuration, upgrade, and export configuration
+
+These options require the next release after v5.0.2. For testing the source version, use `valicm/drupal-update@main` rather than a published v5.0.2 binary or Action.
+
+Prepare a **disposable database**, database credentials in the site's settings, and `$settings['config_sync_directory']` pointing to the committed configuration. Install the current locked dependencies (including Drush) first:
+
+```sh
+composer install --no-interaction
+drupal-update -t minor --install-existing-config --updatedb --export-config
+```
+
+The order is `drush site:install --existing-config --yes` using the old code, Composer upgrades, `drush updatedb --yes`, then `drush config:export --yes`. Installing before the upgrade gives update hooks the old schema and configuration to migrate. A fresh install does not reproduce production content or data-dependent update problems; use a database copy when testing those.
+
+`site:install` can replace an existing database. Only enable installation for a disposable CI/local site, never a production database. The tool does not provision a database, generate settings, install Drush, or back up/restore databases. Exported YAML is written to the site's configured sync directory.
+
+For an already installed site or database copy, omit installation:
+
+```sh
+drupal-update -t security --updatedb --export-config
+```
+
+For DDEV, provide both launchers:
+
+```sh
+ddev composer install --no-interaction
+drupal-update -t minor --composer-command 'ddev composer' --drush-command 'ddev drush' --install-existing-config --updatedb --export-config
+```
+
+A complete [GitHub Actions example](examples/existing-config-updates.yml) provisions MySQL, prepares disposable settings, installs from configuration, upgrades, and opens a PR containing the exported YAML. It assumes a `web/` docroot and `config/sync/`; adjust its two environment variables and PHP extensions for your project. It runs manually and does not enable automerge.
+
+On GitHub Actions, prepare the database and settings, then:
+
+```yaml
+- run: composer install --no-interaction
+- uses: valicm/drupal-update@main # Unreleased lifecycle options; pin the next release when available.
+  with:
+    update_type: minor
+    install_existing_config: 'true'
+    updatedb: 'true'
+    export_config: 'true'
+```
+
+Include your sync directory (for example `config/sync/**`) along with Composer files in the pull request's `add-paths` if you restrict committed files. Review exported YAML before merging. Disable automatic merging until this workflow is validated for your project.
+
+Post-upgrade commands run on every successful invocation, including when no package updates are eligible. Installation failure stops before upgrading. Composer failure skips post-upgrade Drush commands. A Drush failure fails the invocation and stops subsequent commands; successful Composer changes remain, and database/configuration changes are not rolled back. The Markdown report and GitHub summary include the failed step. `--export-config` requires `--updatedb`.
+
+See Drush's [existing-config installation](https://www.drush.org/13.x/commands/site_install/), [database updates](https://www.drush.org/13.x/commands/updatedb/), and [configuration export](https://www.drush.org/13.x/commands/config_export/) references.
+
 ## CLI and Action option reference
 
 | CLI | Action input | Default |
@@ -217,6 +265,10 @@ Archive the Markdown report even when the command fails. The CLI returns a nonze
 | `--exclude`, `-e` | `update_exclude` | empty |
 | `--scope` | `update_scope` | all |
 | `--packages` | `update_packages` | empty |
+| `--install-existing-config` | `install_existing_config` | false |
+| `--updatedb` | `updatedb` | false |
+| `--export-config` | `export_config` | false |
+| `--drush-command` | `drush_command` | vendor/bin/drush |
 | `--composer-command` | `composer_command` | composer |
 | `--security-update-pinned` | `security_update_pinned` | false |
 | `--skip-patched` | `skip_patched` | false |
