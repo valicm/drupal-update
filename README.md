@@ -325,15 +325,17 @@ Most upgrade scenarios use controlled Composer responses against the complete pr
 
 The Tests workflow runs on pushes to main/develop and pull requests. It checks formatting, race-enabled tests, vet, CLI builds, release packaging, and GitHub workflow syntax. PHP and Composer are installed so real Composer and historical fixture tests run rather than skip.
 
+To release, open a pull request into main from a branch named `release-X.Y.Z` (or `release-X.Y.Z-rc.N`) in this repository. When it merges, the Tag release workflow tags the merge commit `vX.Y.Z` and runs the Binary release workflow for it. It refuses a malformed version or a tag that already exists, and ignores branches from forks. Pushing a full version tag by hand also starts the Binary release workflow.
+
 The Binary release workflow runs for full version tags such as `v6.0.0` or `v6.0.0-rc.1`. It reruns Tests, cross-compiles six binaries, packages licensing notices, generates SHA256SUMS, attests build provenance for every archive listed there, and publishes the archives to a GitHub release. Tags with a prerelease suffix are published as prereleases; they do not replace the stable release.
 
 Maintainers can build archives locally with:
 
 ```sh
-python3 scripts/build-release.py --version v6.0.0 --output /tmp/drupal-update-v5
+python3 scripts/build-release.py --version v6.0.0 --output /tmp/drupal-update-v6
 ```
 
-Use a fresh output directory. To release after tests and review, tag the intended commit and push the tag:
+Use a fresh output directory. To release by hand instead of through a release branch, tag the intended commit and push the tag:
 
 ```sh
 git tag -a v6.0.0 -m "Drupal Update v6.0.0"

@@ -1,7 +1,14 @@
 name: Binary release
+# Runs for a pushed version tag, or from Tag release with the tag it just created.
 on:
   push:
     tags: ['v[0-9]*.[0-9]*.[0-9]*']
+  workflow_call:
+    inputs:
+      version:
+        description: Existing release tag, for example v6.0.0
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
@@ -16,12 +23,14 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.version || github.ref }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Build binary archives and checksums
         env:
-          RELEASE_VERSION: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
         run: python3 scripts/build-release.py --version "$RELEASE_VERSION"
       - name: Verify checksums
         working-directory: dist
@@ -50,7 +59,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_VERSION: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
           args=(--verify-tag --generate-notes)
           if [[ "$RELEASE_VERSION" == *-* ]]; then
