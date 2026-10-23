@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -89,7 +88,7 @@ func TestSkipPatchedCoreFromExternalDefinitions(t *testing.T) {
 	}
 }
 func TestPatchFailureIdentificationRefusesAmbiguity(t *testing.T) {
-	patches := map[string]json.RawMessage{"drupal/token": json.RawMessage(`{"fix":"https://example.test/one.patch"}`), "drupal/redirect": json.RawMessage(`{"fix":"https://example.test/two.patch"}`)}
+	patches := map[string][]string{"drupal/token": {"https://example.test/one.patch"}, "drupal/redirect": {"https://example.test/two.patch"}}
 	if got := failedPatchTarget("Could not apply patch https://example.test/one.patch https://example.test/two.patch", patches, []string{"drupal/token", "drupal/redirect"}); got != "" {
 		t.Fatal(got)
 	}

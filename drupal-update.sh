@@ -30,9 +30,10 @@ fi
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/drupal-update-wrapper.XXXXXXXX")
 trap 'rm -rf -- "$work_dir"' EXIT
 
-# A source checkout can build the current code without waiting for a release.
-# Build in the script directory, then run in the caller's original project.
-if [[ -n "$script_dir" && -f "$script_dir/go.mod" && -f "$script_dir/main.go" ]] && command -v go >/dev/null 2>&1; then
+# A source checkout can build the current code without waiting for a release,
+# unless the caller named a release. Build in the script directory, then run in
+# the caller's original project.
+if [[ -z "${DRUPAL_UPDATE_VERSION:-}" && -n "$script_dir" && -f "$script_dir/go.mod" && -f "$script_dir/main.go" ]] && command -v go >/dev/null 2>&1; then
   (cd -- "$script_dir" && go build -buildvcs=false -o "$work_dir/drupal-update" .)
   "$work_dir/drupal-update" "$@"
   exit $?

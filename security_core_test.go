@@ -83,10 +83,10 @@ func TestComposerSecurityCoreRecommendedIntegration(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	var packages []map[string]interface{}
+	var packages []map[string]any
 	for _, release := range []string{"11.4.8", "11.4.11"} {
 		for _, name := range []string{"drupal/core", "drupal/core-recommended", "drupal/core-composer-scaffold", "drupal/core-project-message", "drupal/core-dev"} {
-			p := map[string]interface{}{"name": name, "version": release, "type": "metapackage"}
+			p := map[string]any{"name": name, "version": release, "type": "metapackage"}
 			if name == "drupal/core-recommended" || name == "drupal/core-dev" {
 				p["require"] = map[string]string{"drupal/core": release}
 			}
@@ -94,10 +94,10 @@ func TestComposerSecurityCoreRecommendedIntegration(t *testing.T) {
 		}
 	}
 	for _, release := range []string{"5.0.15", "5.0.16"} {
-		packages = append(packages, map[string]interface{}{"name": "drupal/gin", "version": release, "type": "metapackage", "require": map[string]string{"drupal/core": "^11.2"}})
+		packages = append(packages, map[string]any{"name": "drupal/gin", "version": release, "type": "metapackage", "require": map[string]string{"drupal/core": "^11.2"}})
 	}
-	packages = append(packages, map[string]interface{}{"name": "drupal/addtoany", "version": "2.0.7", "type": "metapackage", "require": map[string]string{"drupal/core": "^10.1 || ^11"}})
-	m["repositories"], _ = json.Marshal([]interface{}{map[string]interface{}{"type": "package", "package": packages}, map[string]interface{}{"packagist.org": false}})
+	packages = append(packages, map[string]any{"name": "drupal/addtoany", "version": "2.0.7", "type": "metapackage", "require": map[string]string{"drupal/core": "^10.1 || ^11"}})
+	m["repositories"], _ = json.Marshal([]any{map[string]any{"type": "package", "package": packages}, map[string]any{"packagist.org": false}})
 	if e = writeManifest(m); e != nil {
 		t.Fatal(e)
 	}

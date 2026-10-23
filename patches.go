@@ -10,76 +10,117 @@ import (
 var skipPatched bool
 var patchFailurePolicy = "fail"
 
-func configuredPatches(m manifest) (map[string]json.RawMessage, error) {
-	var extra map[string]json.RawMessage
-	if len(m["extra"]) == 0 {
-		return map[string]json.RawMessage{}, nil
+// configuredPatches maps each patched package to its patch URLs from every
+// source composer-patches reads: inline extra.patches, the 1.x
+// extra.patches-file, the 2.x extra.composer-patches.patches-file (patches.json
+// by default) and patches.lock.json, which also records dependency patches.
+func configuredPatches(m manifest) (map[string][]string, error) {
+	var extra struct {
+		Patches         map[string]json.RawMessage `json:"patches"`
+		PatchesFile     string                     `json:"patches-file"`
+		ComposerPatches struct {
+			PatchesFile string `json:"patches-file"`
+		} `json:"composer-patches"`
 	}
-	if e := json.Unmarshal(m["extra"], &extra); e != nil {
-		return nil, e
-	}
-	var patches map[string]json.RawMessage
-	if raw := extra["patches"]; len(raw) > 0 && string(raw) != "null" {
-		if e := json.Unmarshal(raw, &patches); e != nil {
+	if len(m["extra"]) > 0 {
+		if e := json.Unmarshal(m["extra"], &extra); e != nil {
 			return nil, e
 		}
 	}
-	if patches == nil {
-		patches = map[string]json.RawMessage{}
-	}
-	if raw := extra["patches-file"]; len(raw) > 0 {
-		var path string
-		if e := json.Unmarshal(raw, &path); e != nil {
-			return nil, e
+	patches := map[string][]string{}
+	add := func(definitions map[string]json.RawMessage) {
+		for n, raw := range definitions {
+			patches[n] = append(patches[n], patchURLs(raw)...)
 		}
-		b, e := os.ReadFile(path)
+	}
+	add(extra.Patches)
+	// 1.x fails on a missing patches file; 2.x skips it silently.
+	if extra.PatchesFile != "" {
+		definitions, e := readPatchDefinitions(extra.PatchesFile)
 		if e != nil {
 			return nil, fmt.Errorf("read patch definitions: %w", e)
 		}
-		var external struct {
-			Patches map[string]json.RawMessage `json:"patches"`
+		add(definitions)
+	}
+	version2File := extra.ComposerPatches.PatchesFile
+	if version2File == "" {
+		version2File = "patches.json"
+	}
+	for _, path := range []string{version2File, "patches.lock.json"} {
+		if path == extra.PatchesFile {
+			continue
 		}
-		if e = json.Unmarshal(b, &external); e != nil {
-			return nil, e
+		definitions, e := readPatchDefinitions(path)
+		if os.IsNotExist(e) {
+			continue
 		}
-		for n, v := range external.Patches {
-			patches[n] = v
+		if e != nil {
+			return nil, fmt.Errorf("read patch definitions from %s: %w", path, e)
 		}
+		add(definitions)
 	}
 	return patches, nil
 }
-func hasPatches(name string, patches map[string]json.RawMessage) bool {
-	for n, raw := range patches {
-		if string(raw) == "{}" || string(raw) == "[]" || string(raw) == "null" {
-			continue
+func readPatchDefinitions(path string) (map[string]json.RawMessage, error) {
+	b, e := os.ReadFile(path)
+	if e != nil {
+		return nil, e
+	}
+	var file struct {
+		Patches map[string]json.RawMessage `json:"patches"`
+	}
+	if e = json.Unmarshal(b, &file); e != nil {
+		return nil, e
+	}
+	return file.Patches, nil
+}
+
+// patchURLs reads both styles: {"description": "url"} and [{"url": "…"}]. A
+// definition in any other shape counts as one patch with an unknown URL ("").
+func patchURLs(raw json.RawMessage) []string {
+	switch strings.TrimSpace(string(raw)) {
+	case "", "{}", "[]", "null":
+		return nil
+	}
+	var urls []string
+	var legacy map[string]string
+	var expanded []struct {
+		URL string `json:"url"`
+	}
+	if json.Unmarshal(raw, &legacy) == nil {
+		for _, u := range legacy {
+			urls = append(urls, u)
 		}
-		if name == n || (isCore(name) && isCore(n)) {
+	} else if json.Unmarshal(raw, &expanded) == nil {
+		for _, p := range expanded {
+			urls = append(urls, p.URL)
+		}
+	}
+	if len(urls) == 0 {
+		return []string{""}
+	}
+	return urls
+}
+func hasPatches(name string, patches map[string][]string) bool {
+	for n, urls := range patches {
+		if len(urls) > 0 && (name == n || (isCore(name) && isCore(n))) {
 			return true
 		}
 	}
 	return false
 }
-func failedPatchTarget(log string, patches map[string]json.RawMessage, args []string) string {
+
+// withoutSpace undoes Composer's wrapping of long exception lines, which can
+// split a patch URL across lines.
+func withoutSpace(s string) string {
+	return strings.Join(strings.Fields(s), "")
+}
+func failedPatchTarget(log string, patches map[string][]string, args []string) string {
+	text := withoutSpace(log)
 	matches := map[string]bool{}
-	for name, raw := range patches {
-		var legacy map[string]string
-		var urls []string
-		if json.Unmarshal(raw, &legacy) == nil {
-			for _, u := range legacy {
-				urls = append(urls, u)
-			}
-		} else {
-			var expanded []struct {
-				URL string `json:"url"`
-			}
-			if json.Unmarshal(raw, &expanded) == nil {
-				for _, p := range expanded {
-					urls = append(urls, p.URL)
-				}
-			}
-		}
+	for name, urls := range patches {
 		for _, u := range urls {
-			if u != "" && strings.Contains(log, u) {
+			if u != "" && strings.Contains(text, withoutSpace(u)) {
 				matches[name] = true
 			}
 		}
@@ -97,7 +138,6 @@ func failedPatchTarget(log string, patches map[string]json.RawMessage, args []st
 	return ""
 }
 func applyUpdateTargets(m manifest, roots map[string]string, args []string, targets map[string]string) (string, error) {
-	changed := false
 	for _, n := range args {
 		if target := targets[n]; target != "" {
 			constraint, e := modeConstraint(roots[n], target)
@@ -107,12 +147,6 @@ func applyUpdateTargets(m manifest, roots map[string]string, args []string, targ
 			if e = setConstraint(m, n, constraint); e != nil {
 				return "", e
 			}
-			changed = true
-		}
-	}
-	if changed {
-		if e := writeManifest(m); e != nil {
-			return "", e
 		}
 	}
 	command := []string{"update"}

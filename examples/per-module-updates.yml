@@ -1,5 +1,5 @@
 # Copy to .github/workflows/drupal-module-updates.yml in the Drupal project.
-# Uses the v5.0.3 Go release.
+# Uses the v6.0.0 Go release.
 name: Individual Drupal module updates
 on:
   workflow_dispatch:
@@ -20,12 +20,12 @@ jobs:
       matrix:
         package: [token, pathauto, redirect]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           tools: composer:v2
-      - uses: valicm/drupal-update@v5.0.3
+      - uses: valicm/drupal-update@v6.0.0
         with:
           update_type: minor
           update_scope: contrib

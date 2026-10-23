@@ -99,7 +99,7 @@ func assertUnchangedProjectFields(t *testing.T, before, after manifest) {
 		if key == "require" || key == "require-dev" {
 			continue
 		}
-		var old, new interface{}
+		var old, new any
 		_ = json.Unmarshal(raw, &old)
 		_ = json.Unmarshal(after[key], &new)
 		if !reflect.DeepEqual(old, new) {
@@ -122,14 +122,14 @@ func TestRealFixturesMixedMinorUpdates(t *testing.T) {
 					if !releaseVersion.MatchString(current) || strings.Contains(strings.ToLower(roots[name]), "dev") {
 						t.Fatalf("queried a development branch: %s", name)
 					}
-					base := strings.SplitN(current, "-", 2)[0]
+					base, _, _ := strings.Cut(current, "-")
 					v, ok := version(base)
 					if !ok {
 						t.Fatal(current)
 					}
 					target := fmt.Sprintf("%d.%d.%d", v[0], v[1]+1, 0)
 					// Also offer a newer major to ensure minor mode does not select it.
-					b, _ := json.Marshal(map[string]interface{}{"versions": []string{target, fmt.Sprintf("%d.0.0", v[0]+1), "dev-main"}})
+					b, _ := json.Marshal(map[string]any{"versions": []string{target, fmt.Sprintf("%d.0.0", v[0]+1), "dev-main"}})
 					return b, "", nil
 				}
 				if args[0] != "update" {
@@ -226,7 +226,7 @@ func TestRealFixturesCoreMajorAndRollback(t *testing.T) {
 						if !isCore(args[1]) {
 							t.Fatal("selected contrib")
 						}
-						b, _ := json.Marshal(map[string]interface{}{"versions": []string{target}})
+						b, _ := json.Marshal(map[string]any{"versions": []string{target}})
 						return b, "", nil
 					}
 					updates := map[string]string{}
@@ -387,7 +387,7 @@ func TestRealFixturesSecurityTargetsIncludeTransitiveDrupal(t *testing.T) {
 					if audits == 2 {
 						return []byte(`{"advisories":[]}`), "", nil
 					}
-					b, _ := json.Marshal(map[string]interface{}{"advisories": map[string]interface{}{affectedName: []interface{}{map[string]string{"title": "controlled fixture advisory"}}}})
+					b, _ := json.Marshal(map[string]any{"advisories": map[string]any{affectedName: []any{map[string]string{"title": "controlled fixture advisory"}}}})
 					return b, "", composerExit(1)
 				}
 				if args[0] != "update" || len(args) < 2 || args[1] != affectedName {
@@ -423,7 +423,7 @@ func TestRealFixturePrereleaseToStable(t *testing.T) {
 		if _, direct := roots[name]; !direct || !releaseVersion.MatchString(current) || !strings.Contains(current, "-") {
 			continue
 		}
-		stable := strings.SplitN(current, "-", 2)[0]
+		stable, _, _ := strings.Cut(current, "-")
 		target, e := targetVersion(current, []string{stable}, "minor")
 		if e != nil || target != stable {
 			t.Errorf("%s: %s → %s: %v", name, current, target, e)

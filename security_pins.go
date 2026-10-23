@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -71,13 +72,7 @@ func securityPinnedTargets(names []string, roots, locked map[string]string) (map
 		if !exactRequirement(roots[n]) {
 			continue
 		}
-		isRelease := false
-		for _, coreName := range coreReleasePackages {
-			if n == coreName {
-				isRelease = true
-				break
-			}
-		}
+		isRelease := slices.Contains(coreReleasePackages, n)
 		if isRelease {
 			continue
 		}

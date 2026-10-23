@@ -10,11 +10,15 @@ jobs:
   build:
     needs: tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.25.x'
+          go-version-file: go.mod
       - name: Build binary archives and checksums
         env:
           RELEASE_VERSION: ${{ github.ref_name }}
@@ -22,7 +26,12 @@ jobs:
       - name: Verify checksums
         working-directory: dist
         run: sha256sum --check SHA256SUMS
-      - uses: actions/upload-artifact@v4
+      # Lets users check an archive came from this workflow: gh attestation verify <archive> --repo valicm/drupal-update
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-checksums: dist/SHA256SUMS
+      - uses: actions/upload-artifact@v7
         with:
           name: release-assets
           path: dist/*
@@ -33,7 +42,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-assets
           path: dist

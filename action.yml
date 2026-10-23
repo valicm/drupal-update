@@ -1,6 +1,9 @@
 name: Drupal Composer updates
-description: Update Drupal packages using the Go CLI
+description: Update Drupal core and contributed modules with Composer
 author: valicm
+branding:
+  icon: check-circle
+  color: blue
 inputs:
   install_existing_config:
     description: Install locked Drupal from existing config BEFORE upgrading; disposable database only
@@ -41,20 +44,45 @@ inputs:
   patch_failure:
     description: fail or skip (skip is supported for minor/major only)
     default: fail
+  output_file:
+    description: Also write the Markdown report to this .md file
+    default: ''
+outputs:
+  changed:
+    description: "'true' when composer.json, composer.lock or patches.lock.json changed"
+    value: ${{ steps.update.outputs.changed }}
+  report:
+    description: The Markdown report, also exported as DRUPAL_UPDATES_TABLE
+    value: ${{ steps.update.outputs.report }}
 runs:
   using: composite
   steps:
-    - uses: actions/setup-go@v5
+    # A release tag runs that release's checksum-verified binary; any other ref builds its source.
+    - name: Choose updater build
+      id: select
+      shell: bash
+      env:
+        ACTION_REF: ${{ github.action_ref }}
+      run: |
+        if [[ "$ACTION_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9][A-Za-z0-9.-]*)?$ ]]; then
+          echo "release=$ACTION_REF" >> "$GITHUB_OUTPUT"
+        fi
+    - if: steps.select.outputs.release == ''
+      uses: actions/setup-go@v7
       with:
-        go-version: '1.25.x'
+        go-version-file: ${{ github.action_path }}/go.mod
         cache: false
-    - name: Build updater
+    - if: steps.select.outputs.release == ''
+      name: Build updater
       shell: bash
       working-directory: ${{ github.action_path }}
       run: go build -o "$RUNNER_TEMP/drupal-update" .
     - name: Update Drupal
+      id: update
       shell: bash
       env:
+        DRUPAL_UPDATE_VERSION: ${{ steps.select.outputs.release }}
+        DRUPAL_UPDATE_BINARY: ${{ steps.select.outputs.release == '' && format('{0}/drupal-update', runner.temp) || '' }}
         INPUT_INSTALL_EXISTING_CONFIG: ${{ inputs.install_existing_config }}
         INPUT_UPDATEDB: ${{ inputs.updatedb }}
         INPUT_EXPORT_CONFIG: ${{ inputs.export_config }}
@@ -68,4 +96,5 @@ runs:
         INPUT_SECURITY_UPDATE_PINNED: ${{ inputs.security_update_pinned }}
         INPUT_SKIP_PATCHED: ${{ inputs.skip_patched }}
         INPUT_PATCH_FAILURE: ${{ inputs.patch_failure }}
-      run: '"$RUNNER_TEMP/drupal-update"'
+        INPUT_OUTPUT_FILE: ${{ inputs.output_file }}
+      run: bash "$GITHUB_ACTION_PATH/drupal-update.sh"

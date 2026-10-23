@@ -36,10 +36,10 @@ func TestComposerSecurityPinnedRequirements(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			var packages []map[string]interface{}
+			var packages []map[string]any
 			for _, release := range []string{"11.4.7", "11.4.10", "11.5.0", "12.0.0"} {
 				for _, name := range []string{"drupal/core", "drupal/core-recommended", "drupal/core-composer-scaffold", "drupal/core-project-message", "drupal/core-dev"} {
-					p := map[string]interface{}{"name": name, "version": release, "type": "metapackage"}
+					p := map[string]any{"name": name, "version": release, "type": "metapackage"}
 					if name == "drupal/core-recommended" || name == "drupal/core-dev" {
 						p["require"] = map[string]string{"drupal/core": release}
 					}
@@ -47,12 +47,12 @@ func TestComposerSecurityPinnedRequirements(t *testing.T) {
 				}
 			}
 			for _, release := range []string{"5.0.15", "5.0.16", "5.1.0", "6.0.0"} {
-				packages = append(packages, map[string]interface{}{"name": "drupal/gin", "version": release, "type": "metapackage", "require": map[string]string{"drupal/core": "^11"}})
+				packages = append(packages, map[string]any{"name": "drupal/gin", "version": release, "type": "metapackage", "require": map[string]string{"drupal/core": "^11"}})
 			}
 			for _, release := range []string{"1.0.0", "1.1.0"} {
-				packages = append(packages, map[string]interface{}{"name": "drupal/unrelated", "version": release, "type": "metapackage"})
+				packages = append(packages, map[string]any{"name": "drupal/unrelated", "version": release, "type": "metapackage"})
 			}
-			m["repositories"], _ = json.Marshal([]interface{}{map[string]interface{}{"type": "package", "package": packages}, map[string]interface{}{"packagist.org": false}})
+			m["repositories"], _ = json.Marshal([]any{map[string]any{"type": "package", "package": packages}, map[string]any{"packagist.org": false}})
 			if e = writeManifest(m); e != nil {
 				t.Fatal(e)
 			}
