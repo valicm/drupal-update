@@ -103,7 +103,7 @@ func TestComposerSelectionIntegration(t *testing.T) {
 					packages = append(packages, map[string]string{"name": name, "version": release, "type": "metapackage"})
 				}
 			}
-			project := map[string]interface{}{"name": "test/selection", "require": roots, "repositories": []interface{}{map[string]interface{}{"type": "package", "package": packages}, map[string]interface{}{"packagist.org": false}}}
+			project := map[string]any{"name": "test/selection", "require": roots, "repositories": []any{map[string]any{"type": "package", "package": packages}, map[string]any{"packagist.org": false}}}
 			b, e := json.Marshal(project)
 			if e != nil {
 				t.Fatal(e)
@@ -212,7 +212,7 @@ func TestComposerRetainedCompoundConstraint(t *testing.T) {
 			if !strings.Contains(constraint, "||") {
 				t.Fatal("fixture no longer exercises compound constraints")
 			}
-			project := map[string]interface{}{"name": "test/compound", "require": map[string]string{"drupal/commerce_shipping": constraint}, "repositories": []interface{}{map[string]interface{}{"type": "package", "package": []map[string]string{{"name": "drupal/commerce_shipping", "version": "3.0.3", "type": "metapackage"}, {"name": "drupal/commerce_shipping", "version": "3.1.0", "type": "metapackage"}, {"name": "drupal/commerce_shipping", "version": "4.0.0", "type": "metapackage"}}}, map[string]interface{}{"packagist.org": false}}}
+			project := map[string]any{"name": "test/compound", "require": map[string]string{"drupal/commerce_shipping": constraint}, "repositories": []any{map[string]any{"type": "package", "package": []map[string]string{{"name": "drupal/commerce_shipping", "version": "3.0.3", "type": "metapackage"}, {"name": "drupal/commerce_shipping", "version": "3.1.0", "type": "metapackage"}, {"name": "drupal/commerce_shipping", "version": "4.0.0", "type": "metapackage"}}}, map[string]any{"packagist.org": false}}}
 			b, e := json.Marshal(project)
 			if e != nil {
 				t.Fatal(e)

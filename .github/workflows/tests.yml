@@ -8,21 +8,17 @@ permissions:
   contents: read
 jobs:
   test:
-    name: Go ${{ matrix.go }} / PHP ${{ matrix.php }}
+    name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - go: '1.21.x'
-            php: '8.3'
-          - go: '1.25.x'
-            php: '8.4'
+        php: ['8.3', '8.4']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: ${{ matrix.go }}
+          go-version-file: go.mod
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -46,28 +42,28 @@ jobs:
           go build -trimpath -o "$RUNNER_TEMP/drupal-update" .
           "$RUNNER_TEMP/drupal-update" --help
       - name: Smoke-test release packaging
-        if: matrix.go == '1.25.x'
+        if: matrix.php == '8.4'
         run: |
-          python3 scripts/build-release.py --version v5.0.0-ci --target linux/amd64 --output "$RUNNER_TEMP/release-smoke"
+          python3 scripts/build-release.py --version v6.0.0-ci --target linux/amd64 --output "$RUNNER_TEMP/release-smoke"
           cd "$RUNNER_TEMP/release-smoke"
           sha256sum --check SHA256SUMS
-          tar -xzf drupal-update_v5.0.0-ci_linux_amd64.tar.gz
+          tar -xzf drupal-update_v6.0.0-ci_linux_amd64.tar.gz
           ./drupal-update --version
           bash ./drupal-update.sh --version
   workflows:
     name: Validate GitHub workflows
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.25.x'
-      - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -shellcheck= -pyflakes= .github/workflows/*.yml examples/*.yml
+          go-version-file: go.mod
+      - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes= .github/workflows/*.yml examples/*.yml
   action:
     name: Composite Action smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: updater
       - uses: shivammathur/setup-php@v2
@@ -96,11 +92,16 @@ jobs:
           PYCODE
           composer update --no-interaction --no-progress
       - uses: ./updater
+        id: updater
         with:
           update_type: minor
           update_scope: contrib
           update_packages: demo
-      - name: Verify update and exported summary
+          output_file: report.md
+      - name: Verify update, exported summary and outputs
+        env:
+          CHANGED: ${{ steps.updater.outputs.changed }}
+          REPORT: ${{ steps.updater.outputs.report }}
         run: |
           python3 - <<'PYCODE'
           import json
@@ -108,6 +109,9 @@ jobs:
           from pathlib import Path
           lock = json.loads(Path("composer.lock").read_text())
           assert lock["packages"][0]["version"] == "1.5.0"
+          assert json.loads(Path("composer.json").read_text())["require"]["drupal/demo"] == "1.5.0"
           assert "1.5.0" in os.environ["DRUPAL_UPDATES_TABLE"]
           assert "drupal/demo" in os.environ["DRUPAL_UPDATES_TABLE"]
+          assert os.environ["CHANGED"] == "true"
+          assert os.environ["REPORT"].strip() == Path("report.md").read_text().strip()
           PYCODE

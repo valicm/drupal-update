@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -43,7 +44,7 @@ func (d drupalLifecycle) run(output string, upgrade func() error) (result error)
 	}()
 	step := func(args ...string) error {
 		name := strings.Join(args, " ")
-		fmt.Printf("Running Drush %s\n", name)
+		fmt.Fprintf(os.Stderr, "Running Drush %s\n", name)
 		log, err := runDrush(command, args...)
 		if err != nil {
 			failure := fmt.Errorf("Drush %s failed: %w\n%s", name, err, cleanComposerOutput(string(log), ""))
@@ -51,7 +52,7 @@ func (d drupalLifecycle) run(output string, upgrade func() error) (result error)
 			report.WriteString("\nDatabase, installed files and configuration may have changed. No database rollback is performed; review the site before retrying.\n")
 			return failure
 		}
-		fmt.Print(string(log))
+		fmt.Fprint(os.Stderr, string(log))
 		fmt.Fprintf(&report, "\nDrush `%s` completed.\n", name)
 		return nil
 	}

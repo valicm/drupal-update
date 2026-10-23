@@ -97,6 +97,11 @@ func TestBashWrapperVerifiedDownloadAndCleanup(t *testing.T) {
 			}
 			script := filepath.Join(dir, "drupal-update.sh")
 			writeWrapperFile(t, script, source)
+			// An explicit release wins over building a source checkout beside the wrapper.
+			writeWrapperFile(t, filepath.Join(dir, "go.mod"), []byte("module test\n"))
+			writeWrapperFile(t, filepath.Join(dir, "main.go"), []byte("package main\n"))
+			built := filepath.Join(dir, "built")
+			writeWrapperFile(t, filepath.Join(tools, "go"), []byte("#!/bin/bash\ntouch \""+built+"\"\nexit 1\n"))
 			system, e := exec.Command("uname", "-s").Output()
 			if e != nil {
 				t.Fatal(e)
@@ -161,6 +166,9 @@ fi
 			if !corrupt && captureErr != nil {
 				t.Fatal(captureErr)
 			}
+			if _, e = os.Stat(built); !os.IsNotExist(e) {
+				t.Fatal("built the source checkout instead of the requested release")
+			}
 			temp, e := os.ReadFile(record)
 			if e != nil {
 				t.Fatal(e)
@@ -192,7 +200,7 @@ func TestBashWrapperSourceBuildKeepsCallerDirectory(t *testing.T) {
 	buildCapture := filepath.Join(dir, "build-capture")
 	cmd := exec.Command("bash", filepath.Join(sourceDir, "drupal-update.sh"), "-o", "report.md")
 	cmd.Dir = caller
-	cmd.Env = append(os.Environ(), "PATH="+tools+":/usr/bin:/bin", "DRUPAL_UPDATE_BINARY=", "WRAPPER_CAPTURE="+capture, "BUILD_CAPTURE="+buildCapture, "TEST_FAKE_BINARY="+fakeBinary)
+	cmd.Env = append(os.Environ(), "PATH="+tools+":/usr/bin:/bin", "DRUPAL_UPDATE_BINARY=", "DRUPAL_UPDATE_VERSION=", "WRAPPER_CAPTURE="+capture, "BUILD_CAPTURE="+buildCapture, "TEST_FAKE_BINARY="+fakeBinary)
 	b, e := cmd.CombinedOutput()
 	if e == nil || e.(*exec.ExitError).ExitCode() != 42 {
 		t.Fatalf("%v %s", e, b)

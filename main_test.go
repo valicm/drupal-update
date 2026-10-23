@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,6 +70,56 @@ func TestUpdateWorkflow(t *testing.T) {
 			}
 			if !strings.Contains(string(env), "DRUPAL_UPDATES_TABLE<<") {
 				t.Fatal("missing GitHub output")
+			}
+		})
+	}
+}
+
+func TestStdoutCarriesOnlyTheReportAndActionOutputs(t *testing.T) {
+	for _, newer := range []bool{true, false} {
+		t.Run(map[bool]string{true: "changed", false: "unchanged"}[newer], func(t *testing.T) {
+			modeFixture(t, `{"require":{"drupal/token":"^1"}}`, `{"packages":[{"name":"drupal/token","version":"1.0.0"}]}`)
+			dir, e := os.Getwd()
+			if e != nil {
+				t.Fatal(e)
+			}
+			t.Setenv("GITHUB_ACTIONS", "true")
+			for _, name := range []string{"GITHUB_STEP_SUMMARY", "GITHUB_ENV", "GITHUB_OUTPUT"} {
+				t.Setenv(name, filepath.Join(dir, name))
+			}
+			runComposer = func(args ...string) ([]byte, string, error) {
+				if args[0] == "show" {
+					if newer {
+						return []byte(`{"versions":["1.1.0","1.0.0"]}`), "", nil
+					}
+					return []byte(`{"versions":["1.0.0"]}`), "", nil
+				}
+				return []byte("Composer output"), "Composer progress", os.WriteFile(ComposerLockFile, []byte(`{"packages":[{"name":"drupal/token","version":"1.1.0"}]}`), 0600)
+			}
+			r, w, e := os.Pipe()
+			if e != nil {
+				t.Fatal(e)
+			}
+			stdout := os.Stdout
+			os.Stdout = w
+			t.Cleanup(func() { os.Stdout = stdout })
+			e = newApp().Run([]string{"drupal-update", "--composer-command", "/bin/true", "-t", "minor", "-o", "report.md"})
+			os.Stdout = stdout
+			_ = w.Close()
+			if e != nil {
+				t.Fatal(e)
+			}
+			printed, _ := io.ReadAll(r)
+			report, _ := os.ReadFile("report.md")
+			if len(report) == 0 || string(printed) != string(report) {
+				t.Fatalf("stdout is not the report:\n%s", printed)
+			}
+			outputs, _ := os.ReadFile(filepath.Join(dir, "GITHUB_OUTPUT"))
+			if !strings.Contains(string(outputs), "report<<") || !strings.Contains(string(outputs), string(report)) {
+				t.Fatalf("report output missing:\n%s", outputs)
+			}
+			if want := "changed=" + map[bool]string{true: "true", false: "false"}[newer] + "\n"; !strings.Contains(string(outputs), want) {
+				t.Fatalf("want %q in:\n%s", want, outputs)
 			}
 		})
 	}

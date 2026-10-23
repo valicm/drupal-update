@@ -30,6 +30,15 @@ func modeFixture(t *testing.T, manifestText, lockText string) {
 		}
 	}
 }
+
+// writeManifest replaces composer.json with m; tests build fixtures with it.
+func writeManifest(m manifest) error {
+	b, e := json.MarshalIndent(m, "", "    ")
+	if e != nil {
+		return e
+	}
+	return os.WriteFile(ComposerJsonFile, append(b, '\n'), 0644)
+}
 func TestVersionSelection(t *testing.T) {
 	for _, tc := range []struct{ mode, want string }{{"minor", "1.9.0"}, {"major", "3.0.0"}} {
 		got, e := targetVersion("v1.2.3", []string{"1.2.4", "1.9.0", "2.0.0", "3.0.0", "4.0.0-beta1", "dev-main"}, tc.mode)

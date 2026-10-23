@@ -1,6 +1,6 @@
-module drupal-upgrade
+module github.com/valicm/drupal-update/v6
 
-go 1.21
+go 1.27
 
 require github.com/urfave/cli/v2 v2.25.7
 

@@ -1,5 +1,5 @@
 # Copy to .github/workflows/drupal-updates.yml in the Drupal project.
-# Uses the v5.0.3 Go release.
+# Uses the v6.0.0 Go release.
 name: Separate Drupal core and contrib updates
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
         scope: [core, contrib]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: github.event_name == 'workflow_dispatch' || (matrix.scope == 'core' && github.event.schedule == '17 */4 * * *') || (matrix.scope == 'contrib' && github.event.schedule == '43 2 * * *')
       - uses: shivammathur/setup-php@v2
         if: github.event_name == 'workflow_dispatch' || (matrix.scope == 'core' && github.event.schedule == '17 */4 * * *') || (matrix.scope == 'contrib' && github.event.schedule == '43 2 * * *')
@@ -31,7 +31,7 @@ jobs:
       - name: Update selected scope
         id: updates
         if: github.event_name == 'workflow_dispatch' || (matrix.scope == 'core' && github.event.schedule == '17 */4 * * *') || (matrix.scope == 'contrib' && github.event.schedule == '43 2 * * *')
-        uses: valicm/drupal-update@v5.0.3
+        uses: valicm/drupal-update@v6.0.0
         with:
           update_type: minor
           update_scope: ${{ matrix.scope }}

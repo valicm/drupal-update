@@ -8,6 +8,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 )
 
@@ -29,12 +30,12 @@ const (
 )
 
 type Update struct {
-	Name      string      `json:"name"`
-	Version   string      `json:"version"`
-	Latest    string      `json:"latest"`
-	Status    string      `json:"latest-status"`
-	Homepage  string      `json:"homepage"`
-	Abandoned interface{} `json:"abandoned"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Latest    string `json:"latest"`
+	Status    string `json:"latest-status"`
+	Homepage  string `json:"homepage"`
+	Abandoned any    `json:"abandoned"`
 }
 
 type Outdated struct {
@@ -70,6 +71,7 @@ func newApp() *cli.App {
 				Name:    "output",
 				Aliases: []string{"o"},
 				Value:   DefaultOutput,
+				EnvVars: []string{"INPUT_OUTPUT_FILE"},
 				Usage:   "Specify an output file to save summary",
 			},
 			&cli.StringFlag{
@@ -146,9 +148,14 @@ func newApp() *cli.App {
 				install: c.Bool("install-existing-config"), updateDB: c.Bool("updatedb"),
 				export: c.Bool("export-config"), command: c.String("drush-command"),
 			}
-			return drupal.run(output, func() error {
+			before := trackedFiles()
+			err = drupal.run(output, func() error {
 				return updateProjects(updateType, core, exclude, output)
 			})
+			if os.Getenv("GITHUB_ACTIONS") == "true" {
+				err = errors.Join(err, appendReport(os.Getenv("GITHUB_OUTPUT"), fmt.Sprintf("changed=%t\n", !reflect.DeepEqual(before, trackedFiles()))))
+			}
+			return err
 		},
 	}
 }
@@ -156,7 +163,7 @@ func newApp() *cli.App {
 func main() {
 	err := newApp().Run(os.Args)
 	if err != nil {
-		fmt.Println("Error:", err)
+		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
 }
@@ -167,7 +174,7 @@ func validateOptions(updateType, core, output string) error {
 	}
 
 	if core != "true" && core != "false" {
-		return fmt.Errorf("error: Core flag must be either true or false. Default if empty is false")
+		return fmt.Errorf("error: Core flag must be either true or false. Default if empty is true")
 	}
 
 	if output != "" && !strings.HasSuffix(output, ".md") {
@@ -215,7 +222,7 @@ func validateRequirements() error {
 		if err != nil {
 			return fmt.Errorf("error: %s is not installed", binary)
 		}
-		fmt.Printf("%s is available at %s\n", binary, path)
+		fmt.Fprintf(os.Stderr, "%s is available at %s\n", binary, path)
 	}
 
 	return nil
@@ -330,7 +337,7 @@ func updateProjects(updateType, core, exclude, output string) error {
 			}
 			if !skip {
 				args = append(args, "--with-all-dependencies", "--no-interaction", "--no-progress")
-				fmt.Printf("Updating %s from %s towards %s\n", pkg.Name, pkg.Version, pkg.Latest)
+				fmt.Fprintf(os.Stderr, "Updating %s from %s towards %s\n", pkg.Name, pkg.Version, pkg.Latest)
 				stdout, stderr, updateErr := runComposer(args...)
 				if updateErr == nil {
 					status = Success
@@ -341,7 +348,7 @@ func updateProjects(updateType, core, exclude, output string) error {
 						status = DependencyError
 					}
 					log := cleanComposerOutput(string(stdout), stderr)
-					if strings.Contains(strings.ToLower(log), "could not apply patch") || strings.Contains(strings.ToLower(log), "cannot apply patch") {
+					if isPatchFailure(log) {
 						status = PatchFailure
 					}
 					fmt.Fprintln(os.Stderr, log)
@@ -359,6 +366,16 @@ func updateProjects(updateType, core, exclude, output string) error {
 	return errors.Join(failures...)
 }
 
+// trackedFiles holds the files whose change gives an update PR its content.
+func trackedFiles() map[string]string {
+	files := map[string]string{}
+	for _, p := range []string{ComposerJsonFile, ComposerLockFile, "patches.lock.json"} {
+		if b, e := os.ReadFile(p); e == nil {
+			files[p] = string(b)
+		}
+	}
+	return files
+}
 func isCore(name string) bool {
 	return name == "drupal/core" || strings.HasPrefix(name, "drupal/core-")
 }

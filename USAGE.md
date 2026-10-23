@@ -1,6 +1,6 @@
 # Drupal Update usage scenarios
 
-Examples target **v5.0.3**, including the opt-in pinned-security setting. Publish that tag before using these references. See [installation and migration](README.md) for binary downloads, the Bash wrapper, and migration from v4.
+Examples target **v6.0.0**. See [installation and migration](README.md) for binary downloads, the Bash wrapper, and migration from v4 or v5.
 
 Run standalone commands from the Drupal project directory containing composer.json and composer.lock. Use PHP/extensions that satisfy the project and Composer 2.7+. DDEV or another Composer launcher can provide the runtime instead of host PHP. Review upgrade diffs before deployment.
 
@@ -36,10 +36,10 @@ A downloaded binary needs no Go installation. On Windows, use `drupal-update.exe
 bash /path/to/drupal-update.sh -t all -c false -e token,redirect -o summary.md
 ```
 
-The wrapper forwards the original flags and keeps the caller's project directory. It uses an explicit/adjacent/PATH binary, builds a local source checkout if Go is available, or downloads and verifies a release binary.
+The wrapper forwards the original flags and keeps the caller's project directory. It uses an explicit/adjacent/PATH binary, builds a local source checkout if Go is available and `DRUPAL_UPDATE_VERSION` is unset, or downloads and verifies a release binary.
 
 ```sh
-DRUPAL_UPDATE_VERSION=v5.0.3 bash drupal-update.sh -t security
+DRUPAL_UPDATE_VERSION=v6.0.0 bash drupal-update.sh -t security
 DRUPAL_UPDATE_BINARY=/opt/tools/drupal-update bash drupal-update.sh -t minor
 ```
 
@@ -79,7 +79,7 @@ The summary reports pin changes, and the post-update audit must clear the select
 GitHub Action equivalent:
 
 ```yaml
-- uses: valicm/drupal-update@v5.0.3
+- uses: valicm/drupal-update@v6.0.0
   with:
     update_type: security
     security_update_pinned: 'true'
@@ -113,10 +113,10 @@ Short names and full Drupal package names are accepted. Selecting any core packa
 drupal-update -t minor --skip-patched
 ```
 
-Targets with configured inline or external patches are skipped. A patch on core skips the core group. Patch definitions remain unchanged. These are target filters, not a dependency freeze: a necessary transitive change can still affect a patched package and fail.
+Targets with patches are skipped. Patches are read from inline `extra.patches`, the composer-patches 1.x `extra.patches-file`, the 2.x `extra.composer-patches.patches-file` (default `patches.json`), and `patches.lock.json`, which also lists dependency patches. A patch on core skips the core group. Patch definitions remain unchanged. These are target filters, not a dependency freeze: a necessary transitive change can still affect a patched package and fail.
 
 ```yaml
-- uses: valicm/drupal-update@v5.0.3
+- uses: valicm/drupal-update@v6.0.0
   with:
     update_type: minor
     skip_patched: 'true'
@@ -130,10 +130,10 @@ Explicitly skipping a patched security target can leave its advisories unresolve
 drupal-update -t minor --patch-failure skip -o updates.md
 ```
 
-For minor/major mode, a uniquely identified selected package with a patch failure can be removed from the retry set after restoring the original manifests and locks. A failed core patch skips the core group. Remaining targets are retried with a shrinking target list. Patch definitions are retained.
+For minor/major mode, a uniquely identified selected package with a patch failure can be removed from the retry set after restoring the original manifests and locks. A failed core patch skips the core group. Remaining targets are retried with a shrinking target list. Patch definitions are retained. Failure messages from composer-patches 1.x and 2.x are recognised.
 
 ```yaml
-- uses: valicm/drupal-update@v5.0.3
+- uses: valicm/drupal-update@v6.0.0
   with:
     update_type: minor
     patch_failure: skip
@@ -158,7 +158,7 @@ Simple caret/tilde/wildcard/pinned styles are retained. Supported compound alter
 drupal-update -t nuclear -o recovery.md
 ```
 
-The tool backs up composer.json, composer.lock, and patches.lock.json where present, removes composer.lock, and runs composer install up to eight times. It can relax direct Drupal requirements to `*` after a solver failure and remove an identified failing inline patch before regenerating locks. Unknown/external patch failures stop recovery.
+The tool backs up composer.json, composer.lock, and patches.lock.json where present, removes composer.lock, and runs composer install up to eight times. It can relax direct Drupal requirements to `*` after a solver failure and remove an identified failing inline patch before regenerating locks. The patch entry is removed from composer.json in place, and the remaining patches keep their order. Unknown/external patch failures stop recovery.
 
 Nuclear mode resolves the full graph. Core=false, exclusions, scope/package restrictions, and patch-skipping options are rejected. Successful recovery can leave wildcard constraints and removed patches: review the report and diff. Failed recovery restores manifests/locks, not installed files. It cannot guarantee a resolvable or functioning Drupal site.
 
@@ -166,21 +166,21 @@ Nuclear mode resolves the full graph. Core=false, exclusions, scope/package rest
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v7
   - uses: shivammathur/setup-php@v2
     with:
       php-version: '8.4' # Match the project and required extensions.
       tools: composer:v2
   - name: Apply Drupal security fixes
-    uses: valicm/drupal-update@v5.0.3
+    uses: valicm/drupal-update@v6.0.0
     with:
       update_type: security
       security_update_pinned: 'true'
 ```
 
-The Action builds the CLI, writes the step summary, and exports `DRUPAL_UPDATES_TABLE`. PHP/Composer must already be available, or set `composer_command` to a working container launcher. For PR creation, use one of the complete workflows below and follow the [automation-token setup](README.md#automation-token-setup).
+With a release tag the Action runs that release's checksum-verified binary; other references build from source. It writes the step summary, exports `DRUPAL_UPDATES_TABLE`, and sets the outputs listed in the [option reference](#cli-and-action-option-reference). PHP/Composer must already be available, or set `composer_command` to a working container launcher. For PR creation, use one of the complete workflows below and follow the [automation-token setup](README.md#automation-token-setup).
 
-Pin an exact Action tag such as `@v5.0.3` for predictable behavior. `@latest` is a Git reference, not an automatic alias for GitHub's newest release; this repository does not maintain it. The Bash wrapper's `latest` download setting is separate.
+Pin an exact Action tag such as `@v6.0.0` for predictable behavior. `@latest` is a Git reference, not an automatic alias for GitHub's newest release; this repository does not maintain it. The Bash wrapper's `latest` download setting is separate.
 
 ## 13. Choose a scheduled PR workflow
 
@@ -197,7 +197,7 @@ Copy an example into the Drupal project's `.github/workflows/` and merge it into
 
 Only the security template enables automerge. Enable repository automerge/squash merging and require the site's checks/reviews on the base branch. Without required checks, a mergeable PR can merge immediately. The automation token must cover the repository's resource owner, repository selection, and Contents/Pull requests write access; pending organization approval can cause checkout HTTP 403. See the [setup screenshot and instructions](README.md#automation-token-setup).
 
-The core-major cadence follows the release policy described in the [README schedule notes](README.md#scheduled-examples-using-v502). Polling does not guarantee a release exists. Releases after the daily security check are picked up by the next run, and GitHub can delay scheduled jobs.
+The core-major cadence follows the release policy described in the [README schedule notes](README.md#scheduled-examples). Polling does not guarantee a release exists. Releases after the daily security check are picked up by the next run, and GitHub can delay scheduled jobs.
 
 ## 14. Run from another CI platform and save a report
 
@@ -206,11 +206,11 @@ cd /path/to/checked-out-drupal-project
 drupal-update -t security --security-update-pinned -o security-updates.md
 ```
 
-Archive the Markdown report even when the command fails. The CLI returns a nonzero exit status on failures and prints readable diagnostics. Do not set GitHub's summary/environment variables for another CI platform; standalone use has no GitHub API dependency once the binary is installed.
+Archive the Markdown report even when the command fails. The report is the only thing printed to stdout; progress and diagnostics go to stderr, and failures return a nonzero exit status. Do not set GitHub's summary/environment variables for another CI platform; standalone use has no GitHub API dependency once the binary is installed.
 
 ## 15. Install from configuration, upgrade, and export configuration
 
-These options require the next release after v5.0.3. For testing the source version, use `valicm/drupal-update@main` rather than a published v5.0.3 binary or Action.
+These options are available since v5.0.3.
 
 Prepare a **disposable database**, database credentials in the site's settings, and `$settings['config_sync_directory']` pointing to the committed configuration. Install the current locked dependencies (including Drush) first:
 
@@ -242,7 +242,7 @@ On GitHub Actions, prepare the database and settings, then:
 
 ```yaml
 - run: composer install --no-interaction
-- uses: valicm/drupal-update@main # Unreleased lifecycle options; pin the next release when available.
+- uses: valicm/drupal-update@v6.0.0
   with:
     update_type: minor
     install_existing_config: 'true'
@@ -273,6 +273,11 @@ See Drush's [existing-config installation](https://www.drush.org/13.x/commands/s
 | `--security-update-pinned` | `security_update_pinned` | false |
 | `--skip-patched` | `skip_patched` | false |
 | `--patch-failure` | `patch_failure` | fail |
-| `--output`, `-o` | No output-file input; use the step summary / DRUPAL_UPDATES_TABLE | empty |
+| `--output`, `-o` | `output_file` | empty |
 
 Boolean Action inputs should be quoted, for example `'true'`. CLI boolean switches such as --skip-patched take no value; --core is a string option and uses `--core false`. Output files must have a `.md` extension.
+
+| Action output | Value |
+| --- | --- |
+| `changed` | `'true'` when composer.json, composer.lock or patches.lock.json changed, otherwise `'false'` |
+| `report` | The Markdown report; later steps can also read it from the `DRUPAL_UPDATES_TABLE` environment variable |

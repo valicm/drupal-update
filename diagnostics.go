@@ -11,7 +11,7 @@ var workflowAnnotation = regexp.MustCompile(`^::(?:error|warning|notice)(?: [^:]
 
 func cleanComposerOutput(stdout, stderr string) string {
 	var plain, annotations []string
-	for _, line := range strings.Split(ansiEscape.ReplaceAllString(stdout+"\n"+stderr, ""), "\n") {
+	for line := range strings.SplitSeq(ansiEscape.ReplaceAllString(stdout+"\n"+stderr, ""), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if match := workflowAnnotation.FindStringSubmatch(trimmed); match != nil {
 			annotations = append(annotations, strings.NewReplacer("%0A", "\n", "%0D", "\r", "%25", "%").Replace(match[1]))
@@ -39,7 +39,16 @@ func failureMarkdown(message string) string {
 	}
 	return fmt.Sprintf("\n### Upgrade failed\n\n%stext\n%s\n%s\n", fence, message, fence)
 }
+
+// Patch failure messages from composer-patches 1.x and 2.x.
+var patchFailureMessages = []string{"could not apply patch", "cannot apply patch", "could not be applied", "no available patcher was able to apply patch"}
+
 func isPatchFailure(log string) bool {
-	lower := strings.ToLower(log)
-	return strings.Contains(lower, "could not apply patch") || strings.Contains(lower, "cannot apply patch") || strings.Contains(lower, "could not be applied")
+	text := withoutSpace(strings.ToLower(log))
+	for _, message := range patchFailureMessages {
+		if strings.Contains(text, withoutSpace(message)) {
+			return true
+		}
+	}
+	return false
 }

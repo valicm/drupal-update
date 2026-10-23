@@ -4,7 +4,6 @@
 # Requires committed config/sync, a web/ docroot, and Drush in composer.lock.
 # Adjust DRUPAL_WEB_ROOT and DRUPAL_CONFIG_SYNC for your project.
 # Uses a fresh CI database; no production database credentials are needed.
-# Lifecycle inputs are unreleased: pin the next release once available.
 name: Drupal updates with existing configuration
 on:
   workflow_dispatch:
@@ -43,7 +42,7 @@ jobs:
             echo "Set DRUPAL_UPDATE_TOKEN so update PRs can trigger required checks."
             exit 1
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           token: ${{ secrets.DRUPAL_UPDATE_TOKEN }}
@@ -78,7 +77,7 @@ jobs:
           $settings['trusted_host_patterns'] = ['^localhost$'];
           PHP
       - name: Install from config, upgrade, update database and export config
-        uses: valicm/drupal-update@main # Replace with the next release tag when published.
+        uses: valicm/drupal-update@v6.0.0
         with:
           update_type: minor
           update_scope: all
@@ -101,11 +100,10 @@ jobs:
           title: Drupal updates and migrated configuration
           commit-message: Drupal updates and migrated configuration
           body: ${{ env.DRUPAL_UPDATES_TABLE }}
-          # Keep exported YAML and scaffold changes; exclude CI settings and backups.
+          # Keep exported YAML and scaffold changes; exclude CI settings.
           # Normal repository ignore rules still apply to vendor and installed packages.
           add-paths: |
             .
-            :(exclude).drupal-update-backup-*/**
             :(exclude)${{ env.DRUPAL_WEB_ROOT }}/sites/default/settings*.php
             :(exclude)${{ env.DRUPAL_WEB_ROOT }}/sites/default/files/**
           delete-branch: true

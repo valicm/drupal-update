@@ -11,7 +11,7 @@ Requires composer.json and composer.lock in the working directory, plus a workin
 
 For practical scenarios and a CLI/Action option reference, see [USAGE.md](USAGE.md).
 
-Examples target the upcoming **v5.0.3** release; publish its tag before using the pinned references.
+Examples use **v6.0.0**. Coming from v5? See [migration from v5 to v6](#migration-from-v5-to-v6).
 
 ## Standalone use outside GitHub Actions
 
@@ -28,7 +28,7 @@ Available binaries:
 Linux/macOS installation (select a published Go release; v4 has no Go binaries):
 
 ```sh
-version=v5.0.3
+version=v6.0.0
 case "$(uname -s)" in
   Linux) os=linux ;;
   Darwin) os=darwin ;;
@@ -64,6 +64,12 @@ drupal-update --version
 
 Add `$HOME/.local/bin` to your shell's PATH permanently if needed. The downloaded files remain in the printed/assigned `workdir` for inspection.
 
+Release archives from v6.0.0 on also carry a GitHub build provenance attestation. With the [GitHub CLI](https://cli.github.com/manual/gh_attestation_verify), confirm an archive was built by this repository's release workflow:
+
+```sh
+gh attestation verify "${workdir}/${archive}" --repo valicm/drupal-update
+```
+
 On Windows, download the matching ZIP and `SHA256SUMS`, compare the ZIP's SHA-256 with `Get-FileHash`, then use `Expand-Archive` and add the extracted directory to PATH. Keep its license and notice files with the executable. Invoke `drupal-update.exe` from your Drupal project directory.
 
 Run from the directory containing composer.json and composer.lock:
@@ -77,15 +83,15 @@ drupal-update --composer-command 'ddev composer' -t minor
 drupal-update -c false -e token,drupal/redirect -o updates.md
 ```
 
-For other CI systems, install the binary and Composer, then run the same commands in the checked-out Drupal project. There is no GitHub dependency at runtime. Markdown goes to stdout and an optional `-o` file; errors return a nonzero exit code. Set `GITHUB_ACTIONS` only when GitHub's summary/environment files are available.
+For other CI systems, install the binary and Composer, then run the same commands in the checked-out Drupal project. There is no GitHub dependency at runtime. The Markdown report is the only thing written to stdout (and to an optional `-o` file); progress, Composer diagnostics and errors go to stderr, and failures return a nonzero exit code. Set `GITHUB_ACTIONS` only when GitHub's summary, environment and output files are available.
 
-To build from source, install Go 1.21+ and run `go build -o drupal-update .` (use `-buildvcs=false` in a source directory without usable Git metadata). A source build reports version `dev`; release builds embed their full tag.
+To build from source, install Go 1.27+ and run `go build -o drupal-update .` (use `-buildvcs=false` in a source directory without usable Git metadata). With Go installed, `go install github.com/valicm/drupal-update/v6@v6.0.0` installs the CLI as `drupal-update`. A source build reports version `dev`; release builds embed their full tag.
 
 The default `semver-safe-update` uses Composer's classification and preserves existing constraints. `all` also changes constraints for packages Composer reports as `update-possible`. Core packages are updated together after contributed packages. Existing development requirements remain development requirements. The legacy `all` mode cannot coordinate core-dev in require-dev; use `major` for coordinated core changes.
 
 Composer can update transitive dependencies with `--with-all-dependencies`. Proposed versions in the summary are discovery results, not confirmation of the installed version. Platform requirements remain enforced. Failed package updates produce a nonzero exit code after writing the report; Composer scripts and plugins can modify the project, so use a working branch and review the resulting diff.
 
-The composite action builds the same CLI and runs it in the caller's workspace. It accepts `update_type`, `update_core`, `update_exclude`, `composer_command`, `update_scope`, and `update_packages`, writes the step summary, and exports `DRUPAL_UPDATES_TABLE`. The selected Composer launcher must already be available and its container or runtime must be ready. CLI flags override action input environment variables.
+The composite action runs the same CLI in the caller's workspace. Referenced by a release tag such as `@v6.0.0`, it downloads that release's binary and verifies its SHA-256 checksum; any other reference (a branch or commit) builds the CLI from source with the Go version that go.mod names. Every CLI option has an Action input; see the [option reference](USAGE.md#cli-and-action-option-reference). The Action writes the step summary, exports `DRUPAL_UPDATES_TABLE`, and sets two step outputs: `changed` (`'true'` when composer.json, composer.lock or patches.lock.json changed) and `report` (the Markdown report). The selected Composer launcher must already be available and its container or runtime must be ready. CLI flags override action input environment variables.
 
 ## Legacy Bash compatibility
 
@@ -95,17 +101,30 @@ The `drupal-update.sh` wrapper forwards every argument unchanged, including the 
 bash drupal-update.sh -t all -c false -e token,redirect -o summary.md
 ```
 
-The wrapper tries, in order: `DRUPAL_UPDATE_BINARY`, a binary beside the script, `drupal-update` on PATH, a local source build when Go is installed, then a verified GitHub release download. A source build runs in the script's checkout; upgrades still run in the caller's Drupal project. A downloaded binary is temporary and removed after the command finishes.
+The wrapper tries, in order: `DRUPAL_UPDATE_BINARY`, a binary beside the script, `drupal-update` on PATH, a local source build when Go is installed and `DRUPAL_UPDATE_VERSION` is unset, then a verified GitHub release download. Setting `DRUPAL_UPDATE_VERSION` asks for that release, so a source checkout beside the wrapper is not built. A source build runs in the script's checkout; upgrades still run in the caller's Drupal project. A downloaded binary is temporary and removed after the command finishes.
 
-The repository wrapper defaults to the latest **stable** full release. To pin v5.0.3 explicitly:
+The repository wrapper defaults to the latest **stable** full release. To pin v6.0.0 explicitly:
 
 ```sh
-DRUPAL_UPDATE_VERSION=v5.0.3 bash drupal-update.sh -t minor
-curl -fsSL https://raw.githubusercontent.com/valicm/drupal-update/v5.0.3/drupal-update.sh | \
-  DRUPAL_UPDATE_VERSION=v5.0.3 bash -s -- -t minor -o summary.md
+DRUPAL_UPDATE_VERSION=v6.0.0 bash drupal-update.sh -t minor
+curl -fsSL https://raw.githubusercontent.com/valicm/drupal-update/v6.0.0/drupal-update.sh | \
+  DRUPAL_UPDATE_VERSION=v6.0.0 bash -s -- -t minor -o summary.md
 ```
 
-A release archive includes a wrapper pinned to its exact release and the adjacent binary. Installed/adjacent binaries take precedence over download version selection; use `DRUPAL_UPDATE_BINARY=/path/to/drupal-update` to choose one explicitly. Downloading needs curl, awk, tar (or unzip on Windows Bash), and sha256sum or shasum. Older v1–v4 tags remain unchanged. The v5.0.3 release includes the compatibility wrapper and the new CLI options.
+A release archive includes a wrapper pinned to its exact release and the adjacent binary. Installed/adjacent binaries take precedence over download version selection; use `DRUPAL_UPDATE_BINARY=/path/to/drupal-update` to choose one explicitly. Downloading needs curl, awk, tar (or unzip on Windows Bash), and sha256sum or shasum. Older v1–v4 tags remain unchanged. The v6.0.0 release includes the compatibility wrapper and the new CLI options.
+
+## Migration from v5 to v6
+
+v6 keeps every v5 mode and option. Change `@v5.x.y` to `@v6.0.0`, then check these behaviour changes:
+
+- **stdout carries only the report.** Progress lines, Drush output and `Error:` messages moved to stderr. Scripts that grepped stdout for errors should read stderr.
+- **composer.json is edited in place.** Minor, major and nuclear runs rewrite only the constraint values they change (and, in nuclear mode, the removed patch entry). Key order, indentation and characters such as `>` and `&` stay as written; v5 re-serialized the whole file in alphabetical key order.
+- **composer-patches 2.x is supported.** Its failure message ("No available patcher was able to apply patch …") is recognised, including when Composer wraps it over several lines. `skip_patched` and `patch_failure: skip` also read `patches.json` (or `extra.composer-patches.patches-file`) and `patches.lock.json`, which lists patches defined by dependencies too. Projects whose patches live only there were treated as unpatched by v5.
+- **Backups ignore themselves.** Each `.drupal-update-backup-*` directory contains a `.gitignore`, so `git add .` skips it. The `:(exclude).drupal-update-backup-*/**` lines in older workflow copies are no longer needed but do no harm.
+- **The Action downloads release binaries.** `@v6.0.0` runs that release's checksum-verified binary instead of installing Go and compiling; branch and commit references still build from source. New input `output_file`; new outputs `changed` and `report`.
+- **The wrapper honours an explicit version.** With `DRUPAL_UPDATE_VERSION` set, `drupal-update.sh` downloads that release even beside a source checkout with Go installed.
+- **Go module path.** The module is `github.com/valicm/drupal-update/v6`, so `go install` works.
+- **Release provenance.** Release archives carry GitHub build provenance attestations; check them with `gh attestation verify`.
 
 ## Migration from v4 (Bash) to v5 (Go)
 
@@ -116,37 +135,37 @@ v4 is the last Bash-based release. The Go migration is a new major release: the 
 | `bash drupal-update.sh` | Still supported; forwards to `drupal-update` (same default update type) |
 | `bash drupal-update.sh -t all` | Still supported; legacy `all`, or `-t major` for coordinated major updates |
 | `-c false` / `-e token,redirect` / `-o summary.md` | Same flags on the binary |
-| `curl .../drupal-update.sh \| bash` | Still supported by the wrapper; pin DRUPAL_UPDATE_VERSION to v5.0.3 |
+| `curl .../drupal-update.sh \| bash` | Still supported by the wrapper; pin DRUPAL_UPDATE_VERSION to v6.0.0 |
 | Host `php`, `composer`, `jq`, `sed`, `grep` | Composer launcher; the Go CLI no longer requires jq/sed/grep |
-| `uses: valicm/drupal-update@v4` | Use the exact Go release tag: `@v5.0.3` |
+| `uses: valicm/drupal-update@v4` | Use the exact Go release tag: `@v6.0.0` |
 
 GitHub Action migration:
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v7
 - uses: shivammathur/setup-php@v2
   with:
     php-version: '8.4' # Match your project and its required extensions.
     tools: composer:v2
 - name: Upgrade Drupal core within its current major
-  uses: valicm/drupal-update@v5.0.3
+  uses: valicm/drupal-update@v6.0.0
   with:
     update_type: minor
     update_scope: core
     update_exclude: ''
 ```
 
-The existing inputs `update_type`, `update_core`, and `update_exclude` remain supported. New inputs are `composer_command`, `update_scope`, `update_packages`, `skip_patched`, and `patch_failure`. The Action still exports `DRUPAL_UPDATES_TABLE` and writes the step summary, so existing PR body configuration can remain. The Action builds the CLI with Go 1.25; standalone downloaded binaries do not need Go.
+The existing inputs `update_type`, `update_core`, and `update_exclude` remain supported; the [option reference](USAGE.md#cli-and-action-option-reference) lists every input added since. The Action still exports `DRUPAL_UPDATES_TABLE` and writes the step summary, so existing PR body configuration can remain. Downloaded binaries do not need Go.
 
 Check these behavior changes when migrating:
 
 - The historical default `semver-safe-update` remains; it is not security-only. Choose `security` explicitly for advisory-affected Drupal targets, or `minor` for stable releases within the current major.
 - PHP/extensions/platform requirements are enforced. The old script used `--ignore-platform-reqs`; configure the correct host or container platform instead.
 - Failed upgrades return nonzero even when a report was written. If a workflow needs to upload a failure report, use an `if: always()` reporting step.
-- Constraint styles are preserved. Minor/major can change requirements and normalize JSON formatting; review their diff. Use `major` rather than legacy `all` when coordinating core-dev in require-dev.
+- Constraint styles are preserved. Minor/major can change requirements; review their diff. Use `major` rather than legacy `all` when coordinating core-dev in require-dev.
 - Nuclear recovery is an explicit new mode with backups and bounded retries; do not substitute it for a routine scheduled update.
 
-Examples pin the full `v5.0.3` tag. No floating `v5` Action tag is maintained automatically.
+Examples pin the full `v6.0.0` tag. No floating `v5` Action tag is maintained automatically.
 
 ## Upgrade modes
 
@@ -162,9 +181,9 @@ drupal-update -t nuclear -o recovery.md
 - `major`: select the latest stable release in a newer major for direct Drupal packages. Existing core release packages are coordinated across require and require-dev. Packages without a newer major stay unchanged, subject to Composer's dependency resolution.
 - `nuclear`: back up composer.json, composer.lock and patches.lock.json, remove composer.lock, then run composer install up to eight times. A dependency solving failure can relax direct Drupal requirements to `*`. A patch failure can remove an inline patch only when Composer output identifies exactly one configured patch URL. Dependency and patch locks are regenerated after patch changes. External patch definitions and unidentified failures stop recovery. Core=false, exclusions, scope restrictions and package selection are rejected because a fresh resolution affects the whole graph.
 
-Explicit modes keep backups in `.drupal-update-backup-*` in the project. On failure, manifests and lock files are restored; installed files are not restored. Review changes and run composer install to reconcile installed files. PHP/platform requirements and Composer policy remain enforced. Nuclear mode does not remove packages or bypass platform requirements, and cannot guarantee a resolvable project.
+Explicit modes keep backups in `.drupal-update-backup-*` in the project; each contains a `.gitignore`, so Git ignores it. On failure, manifests and lock files are restored; installed files are not restored. Review changes and run composer install to reconcile installed files. PHP/platform requirements and Composer policy remain enforced. Nuclear mode does not remove packages or bypass platform requirements, and cannot guarantee a resolvable project.
 
-Minor and major selection accepts stable numeric versions (including a leading v), excludes development/prerelease versions, and skips development branches or unsupported locked version formats with an explanation in the report. A numeric prerelease can move to a stable release at or above its base version; minor mode still stays within its major. Security mode needs Composer audit; explicit modes need Composer's `--minimal-changes` support (Composer 2.7 or newer). JSON formatting of composer.json is normalized when constraints or patches change. Core and exclusion options filter selected update targets; Composer can still move dependencies needed by those targets. Nuclear retains relaxed `*` constraints on success for review.
+Minor and major selection accepts stable numeric versions (including a leading v), excludes development/prerelease versions, and skips development branches or unsupported locked version formats with an explanation in the report. A numeric prerelease can move to a stable release at or above its base version; minor mode still stays within its major. Security mode needs Composer audit; explicit modes need Composer's `--minimal-changes` support (Composer 2.7 or newer). composer.json is edited in place: only changed constraint values (and a patch entry removed by nuclear mode) are rewritten, so key order, indentation and escaping stay as they were. Core and exclusion options filter selected update targets; Composer can still move dependencies needed by those targets. Nuclear retains relaxed `*` constraints on success for review.
 
 ## Validation
 
@@ -184,10 +203,10 @@ Security mode preserves composer.json requirements by default. If core is pinned
 drupal-update -t security --security-update-pinned -o security-updates.md
 ```
 
-GitHub Action input (included in v5.0.3):
+GitHub Action input (included in v6.0.0):
 
 ```yaml
-- uses: valicm/drupal-update@v5.0.3
+- uses: valicm/drupal-update@v6.0.0
   with:
     update_type: security
     security_update_pinned: 'true'
@@ -209,7 +228,7 @@ drupal-update -t minor --patch-failure skip
 Equivalent GitHub Action inputs:
 
 ```yaml
-- uses: valicm/drupal-update@v5.0.3
+- uses: valicm/drupal-update@v6.0.0
   with:
     update_type: minor
     skip_patched: 'true'
@@ -217,13 +236,13 @@ Equivalent GitHub Action inputs:
     # patch_failure: skip
 ```
 
-- `skip_patched` / `--skip-patched`: omit targets with configured patches. Supports inline legacy/expanded definitions and an external `extra.patches-file`. A patch on drupal/core skips the core update group. Definitions remain unchanged. This filters requested targets; necessary transitive changes can still affect patched dependencies.
-- `patch_failure: skip` / `--patch-failure skip`: minor/major modes only. If Composer fails to apply a patch and its output identifies exactly one configured patched package that was selected, restore the original manifests and locks, skip that package (or core group), and retry the remaining targets. Each retry removes a target, so retries are bounded. Ambiguous, unselected, or unidentified patch failures still fail; platform/dependency errors are never skipped.
+- `skip_patched` / `--skip-patched`: omit targets with configured patches. Reads every place composer-patches 1.x and 2.x keep patches: inline legacy/expanded definitions in `extra.patches`, the 1.x `extra.patches-file`, the 2.x `extra.composer-patches.patches-file` (default `patches.json`), and `patches.lock.json`, which also lists patches defined by dependencies. A patch on drupal/core skips the core update group. Definitions remain unchanged. This filters requested targets; necessary transitive changes can still affect patched dependencies.
+- `patch_failure: skip` / `--patch-failure skip`: minor/major modes only. Failure messages from composer-patches 1.x and 2.x are recognised, including a patch URL that Composer wraps across lines. If Composer fails to apply a patch and its output identifies exactly one configured patched package that was selected, restore the original manifests and locks, skip that package (or core group), and retry the remaining targets. Each retry removes a target, so retries are bounded. Ambiguous, unselected, or unidentified patch failures still fail; platform/dependency errors are never skipped.
 - Default `patch_failure: fail`: retain the existing failure/rollback behavior. Security runs keep failing on unsuccessful security fixes; skip-on-failure is not supported for security mode. Explicitly skipping patched security targets leaves their advisories unresolved and reports them as skipped.
 
 Skipping patches here means skipping upgrade targets, not disabling the patch plugin or stripping patch definitions. Nuclear mode remains the explicit option that can remove identified inline patches. The patch skip options cannot be combined with nuclear mode. Manifest/lock rollback does not restore installed files; inspect skipped results and reconcile installation with composer install before using them.
 
-The v5.0.3 release includes these options and the improved summaries. Previously published RC tags remain unchanged.
+The v6.0.0 release includes these options and the improved summaries. Previously published RC tags remain unchanged.
 
 ## Container Composer (#12)
 
@@ -245,9 +264,9 @@ drupal-update -t major --packages token,drupal/redirect
 
 Scopes are `all` (default), `core`, and `contrib`. Package names can be full names or Drupal module names. Selecting any core package selects the core group so its required release packages stay coordinated. Exclusions and `--core false` still apply; `--scope core --core false` is rejected. Selecting an unknown locked package is an error. These filters choose update targets; necessary transitive dependency changes can still appear in a PR.
 
-### Scheduled examples using v5.0.3
+### Scheduled examples
 
-Use the Go release as a GitHub Action with `valicm/drupal-update@v5.0.3`. Action references resolve the repository tag and its action.yml; using the Action does not require downloading a release archive. Copy the chosen example into your Drupal project's `.github/workflows/`, then configure its PHP/extensions, automation token, and project checks.
+Use the GitHub Action with `valicm/drupal-update@v6.0.0`; a release tag runs that release's checksum-verified binary. Copy the chosen example into your Drupal project's `.github/workflows/`, then configure its PHP/extensions, automation token, and project checks.
 
 | Example | Schedule (UTC) | Targets | Merge behavior |
 | --- | --- | --- | --- |
@@ -262,7 +281,7 @@ The [core release policy](https://www.drupal.org/about/core/policies/core-releas
 
 For a monthly contributed-major cadence, copy the core-major example, remove its `window` job and the update job's `needs`/`if`, change the cron to `47 4 1 * *`, and change `update_scope` to `contrib` (or `all` for monthly major checks across core and contrib). The general/manual workflow also supports this without a schedule. All examples maintain stable PR branches so reruns update existing PRs.
 
-The earlier [split core/contrib](examples/split-updates.yml) and [per-module](examples/per-module-updates.yml) examples remain available for more granular PRs and reference v5.0.3 as well.
+The earlier [split core/contrib](examples/split-updates.yml) and [per-module](examples/per-module-updates.yml) examples remain available for more granular PRs and reference v6.0.0 as well.
 
 ### Automation token setup
 
@@ -294,7 +313,7 @@ The workflow validates Composer files/platform, creates the security PR, and ena
 
 Security mode covers Drupal advisories reported by Composer under the existing constraints, with optional patch-only advancement of exact pins via `security_update_pinned`. It does not fix unrelated non-Drupal packages or force a minor/major jump when a pin blocks the fix. A blocked update still fails and requires a reviewed constraint change. Necessary dependency moves can still accompany a security fix.
 
-The new examples commit project changes, including scaffolded files, while excluding `.drupal-update-backup-*`; normal Git ignore rules still apply. Adjust their `add-paths` for your repository's layout. Schedules run from the default branch, so merge the copied workflows into that branch to activate them. GitHub's scheduled runs can be delayed; the times above are polling times, not guaranteed deployment times.
+The new examples commit project changes, including scaffolded files; the updater's backup directories ignore themselves, and normal Git ignore rules still apply. Adjust their `add-paths` for your repository's layout. Schedules run from the default branch, so merge the copied workflows into that branch to activate them. GitHub's scheduled runs can be delayed; the times above are polling times, not guaranteed deployment times.
 
 ## Real project regression fixtures
 
@@ -306,25 +325,27 @@ Most upgrade scenarios use controlled Composer responses against the complete pr
 
 The Tests workflow runs on pushes to main/develop and pull requests. It checks formatting, race-enabled tests, vet, CLI builds, release packaging, and GitHub workflow syntax. PHP and Composer are installed so real Composer and historical fixture tests run rather than skip.
 
-The Binary release workflow runs for full version tags such as `v5.0.3` or `v5.0.3-rc.1`. It reruns Tests, cross-compiles six binaries, packages licensing notices, generates SHA256SUMS, and publishes the archives to a GitHub release. Tags with a prerelease suffix are published as prereleases; they do not replace the stable release. The first Go release is intended to use major version 5.
+To release, open a pull request into main from a branch named `release-X.Y.Z` (or `release-X.Y.Z-rc.N`) in this repository. When it merges, the Tag release workflow tags the merge commit `vX.Y.Z` and runs the Binary release workflow for it. It refuses a malformed version or a tag that already exists, and ignores branches from forks. Pushing a full version tag by hand also starts the Binary release workflow.
+
+The Binary release workflow runs for full version tags such as `v6.0.0` or `v6.0.0-rc.1`. It reruns Tests, cross-compiles six binaries, packages licensing notices, generates SHA256SUMS, attests build provenance for every archive listed there, and publishes the archives to a GitHub release. Tags with a prerelease suffix are published as prereleases; they do not replace the stable release.
 
 Maintainers can build archives locally with:
 
 ```sh
-python3 scripts/build-release.py --version v5.0.3 --output /tmp/drupal-update-v5
+python3 scripts/build-release.py --version v6.0.0 --output /tmp/drupal-update-v6
 ```
 
-Use a fresh output directory. To release after tests and review, tag the intended commit and push the tag:
+Use a fresh output directory. To release by hand instead of through a release branch, tag the intended commit and push the tag:
 
 ```sh
-git tag -a v5.0.3 -m "Drupal Update v5.0.3"
-git push origin v5.0.3
+git tag -a v6.0.0 -m "Drupal Update v6.0.0"
+git push origin v6.0.0
 ```
 
 Publishing a tag starts the release workflow; do not retag an already published version. No fixture project files are included in binary archives.
 
-### Drupal database updates and configuration export (unreleased)
+### Drupal database updates and configuration export
 
-The next release adds opt-in `--install-existing-config`, `--updatedb`, and `--export-config` options, with matching Action inputs. Install from committed configuration on a disposable database before upgrading, then apply database updates and export configuration after Composer succeeds. For an existing database, omit installation. See [the full workflow and prerequisites](USAGE.md#15-install-from-configuration-upgrade-and-export-configuration).
+The opt-in `--install-existing-config`, `--updatedb`, and `--export-config` options (since v5.0.3, with matching Action inputs) install from committed configuration on a disposable database before upgrading, then apply database updates and export configuration after Composer succeeds. For an existing database, omit installation. See [the full workflow and prerequisites](USAGE.md#15-install-from-configuration-upgrade-and-export-configuration).
 
-See [the install-from-config workflow example](examples/existing-config-updates.yml) for a disposable MySQL service, PHP 8.4, temporary site settings, and an upgrade PR including exported configuration. This example uses `@main` until the lifecycle options are released.
+See [the install-from-config workflow example](examples/existing-config-updates.yml) for a disposable MySQL service, PHP 8.4, temporary site settings, and an upgrade PR including exported configuration.

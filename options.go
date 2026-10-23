@@ -23,7 +23,7 @@ func parseSelection(scope, packages string) (selection, error) {
 	if scope != "all" && scope != "core" && scope != "contrib" {
 		return result, fmt.Errorf("invalid scope %q: use all, core or contrib", scope)
 	}
-	for _, n := range strings.Split(packages, ",") {
+	for n := range strings.SplitSeq(packages, ",") {
 		n = strings.TrimSpace(n)
 		if n == "" {
 			continue
@@ -172,7 +172,7 @@ func releaseLink(name, release string) string {
 // lets Composer enforce whether the selected version is allowed.
 func modeConstraint(previous, target string) (string, error) {
 	if strings.Contains(previous, "||") {
-		for _, part := range strings.Split(previous, "||") {
+		for part := range strings.SplitSeq(previous, "||") {
 			if _, e := upgradeConstraint(strings.TrimSpace(part), target); e != nil {
 				return "", e
 			}

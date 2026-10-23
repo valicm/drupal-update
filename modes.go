@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -36,6 +37,10 @@ func backupProject() (*snapshot, error) {
 		return nil, e
 	}
 	s.dir = dir
+	// Git ignores the backup itself, so `git add .` never commits it.
+	if e := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*\n"), 0600); e != nil {
+		return nil, e
+	}
 	for p, b := range s.files {
 		if e := os.WriteFile(filepath.Join(dir, p), b, 0600); e != nil {
 			return nil, e
@@ -66,24 +71,17 @@ func readManifest() (manifest, error) {
 	e = json.Unmarshal(b, &m)
 	return m, e
 }
-func writeManifest(m manifest) error {
-	b, e := json.MarshalIndent(m, "", "    ")
-	if e != nil {
-		return e
-	}
-	return os.WriteFile(ComposerJsonFile, append(b, '\n'), 0644)
-}
 func requirements(m manifest) map[string]string {
 	result := map[string]string{}
 	for _, section := range []string{"require", "require-dev"} {
 		var entries map[string]string
 		_ = json.Unmarshal(m[section], &entries)
-		for n, v := range entries {
-			result[n] = v
-		}
+		maps.Copy(result, entries)
 	}
 	return result
 }
+
+// setConstraint changes one requirement in m and, in place, in composer.json.
 func setConstraint(m manifest, name, value string) error {
 	for _, section := range []string{"require", "require-dev"} {
 		var entries map[string]string
@@ -93,7 +91,13 @@ func setConstraint(m manifest, name, value string) error {
 		if e := json.Unmarshal(m[section], &entries); e != nil {
 			return e
 		}
-		if _, ok := entries[name]; ok {
+		if previous, ok := entries[name]; ok {
+			if previous == value {
+				return nil
+			}
+			if e := setManifestString(value, section, name); e != nil {
+				return e
+			}
 			entries[name] = value
 			b, e := json.Marshal(entries)
 			if e != nil {
@@ -114,7 +118,7 @@ func version(v string) ([3]int, bool) {
 	if parts == nil {
 		return result, false
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if parts[i+1] != "" {
 			n, e := strconv.Atoi(parts[i+1])
 			if e != nil {
@@ -173,7 +177,7 @@ func excludedPackage(name, core, exclude string) bool {
 	if isCore(name) && core == "false" {
 		return true
 	}
-	for _, n := range strings.Split(exclude, ",") {
+	for n := range strings.SplitSeq(exclude, ",") {
 		n = strings.TrimSpace(n)
 		if n == "" {
 			continue
@@ -253,7 +257,10 @@ func modeReport(report, output string) error {
 		for strings.Contains(report, delimiter) {
 			delimiter += "_"
 		}
-		return appendReport(os.Getenv("GITHUB_ENV"), "DRUPAL_UPDATES_TABLE<<"+delimiter+"\n"+report+delimiter+"\n")
+		return errors.Join(
+			appendReport(os.Getenv("GITHUB_ENV"), "DRUPAL_UPDATES_TABLE<<"+delimiter+"\n"+report+delimiter+"\n"),
+			appendReport(os.Getenv("GITHUB_OUTPUT"), "report<<"+delimiter+"\n"+report+delimiter+"\n"),
+		)
 	}
 	return nil
 }

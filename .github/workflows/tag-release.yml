@@ -1,0 +1,58 @@
+name: Tag release
+# Merging a release-X.Y.Z branch from this repository into main tags the merge
+# commit vX.Y.Z and publishes it. A tag pushed with GITHUB_TOKEN starts no other
+# workflow, so this calls the Binary release workflow itself.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+jobs:
+  tag:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'release-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      - name: Tag the merge commit
+        id: tag
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          version="v${BRANCH#release-}"
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9][A-Za-z0-9.-]*)?$ ]]; then
+            echo "::error::$BRANCH does not name a release; use release-X.Y.Z or release-X.Y.Z-rc.N"
+            exit 1
+          fi
+          # Published tags never move.
+          if git ls-remote --exit-code --tags origin "refs/tags/$version" >/dev/null; then
+            echo "::error::$version already exists"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$version" -m "Drupal Update $version" "$COMMIT"
+          git push origin "refs/tags/$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+  release:
+    needs: tag
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.tag.outputs.version }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write

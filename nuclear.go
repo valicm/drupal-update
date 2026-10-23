@@ -42,8 +42,7 @@ func nuclear(m manifest, report *strings.Builder) (result error) {
 			return nil
 		}
 		log := cleanComposerOutput(string(stdout), stderr)
-		patchFailure := strings.Contains(strings.ToLower(log), "could not apply patch") || strings.Contains(strings.ToLower(log), "cannot apply patch") || strings.Contains(strings.ToLower(log), "could not be applied")
-		if patchFailure {
+		if isPatchFailure(log) {
 			removed, e := removeFailedPatch(m, log)
 			if e != nil {
 				return e
@@ -52,9 +51,6 @@ func nuclear(m manifest, report *strings.Builder) (result error) {
 				return fmt.Errorf("cannot identify a failing inline patch; external patch definitions require manual changes: %w\n%s", err, log)
 			}
 			fmt.Fprintf(report, "- Removed failing inline patch: %s.\n", cell(removed))
-			if e := writeManifest(m); e != nil {
-				return e
-			}
 			// Regenerate both dependency and patch locks after changing patch definitions.
 			for _, p := range []string{ComposerLockFile, "patches.lock.json"} {
 				if e := os.Remove(p); e != nil && !os.IsNotExist(e) {
@@ -82,9 +78,6 @@ func nuclear(m manifest, report *strings.Builder) (result error) {
 			}
 			if len(names) == 0 {
 				return fmt.Errorf("no Drupal constraints to relax: %w\n%s", err, log)
-			}
-			if e := writeManifest(m); e != nil {
-				return e
 			}
 			relaxed = true
 			if e := os.Remove(ComposerLockFile); e != nil && !os.IsNotExist(e) {
@@ -114,27 +107,15 @@ func removeFailedPatch(m manifest, log string) (string, error) {
 	if e := json.Unmarshal(extra["patches"], &patches); e != nil {
 		return "", e
 	}
+	text := withoutSpace(log)
+	failed := func(url string) bool { return url != "" && strings.Contains(text, withoutSpace(url)) }
 	// Composer may print successful and failed patch URLs together. Refuse
 	// removal when the output names multiple configured patches.
 	matched := 0
 	for _, raw := range patches {
-		var legacy map[string]string
-		if json.Unmarshal(raw, &legacy) == nil {
-			for _, url := range legacy {
-				if url != "" && strings.Contains(log, url) {
-					matched++
-				}
-			}
-		} else {
-			var expanded []map[string]json.RawMessage
-			if json.Unmarshal(raw, &expanded) == nil {
-				for _, patch := range expanded {
-					var url string
-					_ = json.Unmarshal(patch["url"], &url)
-					if url != "" && strings.Contains(log, url) {
-						matched++
-					}
-				}
+		for _, url := range patchURLs(raw) {
+			if failed(url) {
+				matched++
 			}
 		}
 	}
@@ -156,7 +137,10 @@ func removeFailedPatch(m manifest, log string) (string, error) {
 			sort.Strings(descriptions)
 			for _, d := range descriptions {
 				url := entries[d]
-				if url != "" && strings.Contains(log, url) {
+				if failed(url) {
+					if e := removeManifestMember(func(_ int, key string) bool { return key == d }, "extra", "patches", n); e != nil {
+						return "", e
+					}
 					delete(entries, d)
 					b, _ := json.Marshal(entries)
 					patches[n] = b
@@ -171,7 +155,10 @@ func removeFailedPatch(m manifest, log string) (string, error) {
 			for i, p := range expanded {
 				var url string
 				_ = json.Unmarshal(p["url"], &url)
-				if url != "" && strings.Contains(log, url) {
+				if failed(url) {
+					if e := removeManifestMember(func(j int, _ string) bool { return j == i }, "extra", "patches", n); e != nil {
+						return "", e
+					}
 					expanded = append(expanded[:i], expanded[i+1:]...)
 					b, _ := json.Marshal(expanded)
 					patches[n] = b
@@ -182,6 +169,8 @@ func removeFailedPatch(m manifest, log string) (string, error) {
 	}
 	return "", nil
 }
+
+// savePatches mirrors a removal already made in composer.json into m.
 func savePatches(m manifest, extra map[string]json.RawMessage, patches map[string]json.RawMessage, removed string) (string, error) {
 	b, e := json.Marshal(patches)
 	if e != nil {
